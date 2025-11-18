@@ -12,6 +12,7 @@ CRAWL4AI_BLOCKLIST_PATH=/stage/rl-rag-mcp/utils/crawl4ai_block_list.txt
 MCP_MAX_CONCURRENT_CALLS=512
 VLLM_ALLOW_LONG_MAX_MODEL_LEN=1
 RUBRIC_JUDGE_MODEL=gpt-4.1-mini
+MCP_CACHE_DIR=.cache-${RANDOM}
 
 # setup a ray cluster, with 2 nodes and 8 GPUs per node.
 # in ai2, we use the following script:
@@ -69,7 +70,7 @@ python open_instruct/grpo_fast.py \
         --mcp_parser_name v20250824 \
         --system_prompt_file open_instruct/search_utils/system_prompts/unified_tool_calling_v20250907.yaml  \
         --mcp_tool_names 'snippet_search,google_search,browse_webpage' \
-        --mcp_server_command "'python -m rl-rag-mcp.mcp_agents.mcp_backend.main --transport http --port 8000 --host 0.0.0.0 --path /mcp'"
+        --mcp_server_command "'python -m dr_agent.mcp_backend.main --transport http --port 8000 --host 0.0.0.0 --path /mcp'"
 
 # For people at Ai2, here is the exact command we used:
 #############

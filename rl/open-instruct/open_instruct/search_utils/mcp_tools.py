@@ -10,9 +10,9 @@ import httpx
 import httpcore
 
 try:
-    from mcp_agents.tool_interface.mcp_tools import MassiveServeSearchTool, SemanticScholarSnippetSearchTool, SerperSearchTool, Crawl4AIBrowseTool, SerperBrowseTool
+    from dr_agent.tool_interface.mcp_tools import MassiveServeSearchTool, SemanticScholarSnippetSearchTool, SerperSearchTool, Crawl4AIBrowseTool, SerperBrowseTool
 except ImportError as e:
-    print(f"Failed to import mcp_agents. Please install from the source code:\n{e}")
+    print(f"Failed to import dr_agent. Please install it:\n{e}")
     raise e
 
 from open_instruct.search_rewards.utils.format_utils import generate_snippet_id
@@ -224,7 +224,7 @@ if __name__ == "__main__":
     from open_instruct.grpo_fast import launch_mcp_subprocess
     import time
     # need to launch mcp server first.
-    launch_mcp_subprocess("python -m rl-rag-mcp.mcp_agents.mcp_backend.main --transport http --port 8000 --host 0.0.0.0 --path /mcp", "./mcp_logs")
+    launch_mcp_subprocess("python -m dr_agent.mcp_backend.main --transport http --port 8000 --host 0.0.0.0 --path /mcp", "./mcp_logs")
     # wait for it to launch.
     time.sleep(10)
     # then we can use the mcp tool.

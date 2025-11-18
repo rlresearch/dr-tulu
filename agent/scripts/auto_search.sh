@@ -5,7 +5,7 @@
 # CUDA_VISIBLE_DEVICES=1 vllm serve Qwen/Qwen3-8B --dtype auto --port 30002 --max-model-len 40960
 
 # And launch the mcp server: 
-# python -m mcp_agents.mcp_backend.main --port 8000
+# python -m dr_agent.mcp_backend.main --port 8000
 
 DATEUID=20250915
 MAX_CONCURRENT=20

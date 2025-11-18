@@ -12,7 +12,7 @@ python open_instruct/search_utils/toolvllm_search_generate_mcp.py \
     --search_api_endpoint https://api.semanticscholar.org/graph/v1/snippet/search \
     --use_astabench_format \
     --mcp_tool_names 'snippet_search,google_search,browse_webpage' \
-    --mcp_server_command 'python -m rl-rag-mcp.mcp_agents.mcp_backend.main --transport http --port 8000 --host 0.0.0.0 --path /mcp'
+    --mcp_server_command 'python -m dr_agent.mcp_backend.main --transport http --port 8000 --host 0.0.0.0 --path /mcp'
 """
 
 import argparse

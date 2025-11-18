@@ -27,8 +27,9 @@ dependencies = [
     "wandb==0.18.1",
     "langdetect==1.0.9",
     "immutabledict==1.2.0",
-    "jsonlines==4.0.0",
-    "fastmcp"  # for mcp tools
+    "jsonlines==4.0.0", # for mcp tools
+    "fastmcp",
+    "dr-agent>=0.1.0",
 ]
 
 [build-system]

@@ -423,7 +423,7 @@ class Args:
     mcp_parser_name: Optional[str] = None
     """The name of the MCP parser to use."""
     mcp_server_command: Optional[str] = None
-    """Command to run MCP server subprocess when use_mcp_tools is enabled. Example: 'uv run python -m rl-rag-mcp.mcp_agents.mcp_backend.main --transport http --port 8000 --host 0.0.0.0 --path /mcp'. If not set, will not launch the MCP stuff on its own."""
+    """Command to run MCP server subprocess when use_mcp_tools is enabled. Example: 'uv run python -m dr_agent.mcp_backend.main --transport http --port 8000 --host 0.0.0.0 --path /mcp'. If not set, will not launch the MCP stuff on its own."""
     mcp_host: Optional[str] = None
     """The host of the MCP server. Note it should match the host of the MCP server command if specified there."""
     mcp_port: Optional[int] = None
