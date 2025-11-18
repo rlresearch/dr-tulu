@@ -245,7 +245,21 @@ async def chat_loop(
                         )
                          active_live.start()
                     else:
-                        active_live.update(render_panel(current_segment_text, "Thinking", "yellow", is_active=True))
+                        if is_answering:
+                            # This shouldn't happen normally if is_answering is true but no match found in accumulated text?
+                            # It means we lost the <answer> tag from the accumulated text?
+                            # But current_segment_text is reset to answer_text on transition.
+                            # Ah, wait. If is_answering is True, `current_segment_text` ALREADY contains just the answer part from previous iterations.
+                            # But `new_chunk` is appended to it at the start of this block: `current_segment_text += new_chunk`.
+                            # So `current_segment_text` grows.
+                            # The issue is that `answer_match` regex `(.*)<answer>(.*)` expects `<answer>` to be present.
+                            # But we STRIPPED `<answer>` when we reset `current_segment_text = answer_text`!
+                            # So `answer_match` will fail in subsequent iterations!
+                            
+                            # FIX: We are already in answering mode. We just append new chunk and render.
+                            active_live.update(render_panel(current_segment_text, "Answer", "green", is_active=True, spinner_text="Generating Answer..."))
+                        else:
+                            active_live.update(render_panel(current_segment_text, "Thinking", "yellow", is_active=True))
         
         # Handle tool calls
         if tool_calls:
