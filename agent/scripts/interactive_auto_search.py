@@ -89,6 +89,7 @@ async def chat_loop(
     last_processed_text_len = 0
     current_segment_text = ""
     active_live = None
+    is_answering = False
 
     # Helper to reduce newlines
     def clean_text(t):
@@ -109,73 +110,30 @@ async def chat_loop(
         
         return t
         
-    # Helper to render the current thinking panel
-    def render_thinking_panel(content, is_active=True):
-        # Check for <answer> tag to split content
-        answer_match = re.search(r'(?s)(.*)<answer>(.*)', content)
-        
+    # Generic helper to render a panel
+    def render_panel(content, title, style, is_active=True, spinner_text="Thinking..."):
         renderables = []
-        spinner_text = "Thinking..."
         
-        if answer_match:
-            thinking_content = answer_match.group(1)
-            answer_content = answer_match.group(2)
-            # Remove closing tag if present
-            answer_content = answer_content.replace("</answer>", "")
+        # Clean and strip content
+        content = clean_text(content).strip()
+        
+        if content:
+            formatted = format_citations(content)
+            renderable = Text.from_markup(formatted)
             
-            # Clean and strip content
-            thinking_content = clean_text(thinking_content).strip()
-            answer_content = clean_text(answer_content).strip()
-            
-            # Prepare Thinking Panel (always static when answer is present)
-            formatted_thinking = format_citations(thinking_content)
-            renderable_thinking = Text.from_markup(formatted_thinking)
-            
-            thinking_panel = Panel(
-                renderable_thinking,
-                title="[yellow]Thinking[/yellow]",
+            panel = Panel(
+                renderable,
+                title=f"[{style}]{title}[/{style}]",
                 title_align="left",
-                border_style="yellow"
+                border_style=style
             )
-            renderables.append(thinking_panel)
-            
-            # Prepare Answer Panel
-            formatted_answer = format_citations(answer_content)
-            renderable_answer = Text.from_markup(formatted_answer)
-            
-            answer_panel = Panel(
-                renderable_answer,
-                title="[green]Answer[/green]",
-                title_align="left",
-                border_style="green"
-            )
-            renderables.append(answer_panel)
-            
-            spinner_text = "Generating Answer..."
+            renderables.append(panel)
+        
+        if not content and title == "Thinking":
+            spinner_text = "Researching..."
 
-        else:
-            # Clean and strip content
-            content = clean_text(content).strip()
-            
-            if content:
-                formatted = format_citations(content)
-                # Use Text.from_markup to support our citation colors + basic formatting
-                renderable = Text.from_markup(formatted)
-                
-                thinking_panel = Panel(
-                    renderable,
-                    title="[yellow]Thinking[/yellow]",
-                    title_align="left",
-                    border_style="yellow"
-                )
-                renderables.append(thinking_panel)
-            
-            if not content:
-                spinner_text = "Researching..."
-        
         # Add spinner at the bottom if active
         if is_active:
-            # Use a padding to separate spinner from panel
             if renderables:
                 renderables.append(Text(" ")) 
             renderables.append(Spinner("dots", text=spinner_text, style="cyan"))
@@ -184,21 +142,26 @@ async def chat_loop(
 
     # Define callback to print step updates
     def print_step_update(text, tool_calls):
-        nonlocal last_processed_text_len, current_segment_text, active_live
+        nonlocal last_processed_text_len, current_segment_text, active_live, is_answering
         
         # Detect if text stream has reset (new generation started, e.g. next agent)
         if text and len(text) < last_processed_text_len:
             last_processed_text_len = 0
             # If we have an active panel, finalize it as it belongs to previous generation
             if active_live:
-                active_live.update(render_thinking_panel(current_segment_text, is_active=False))
+                # If we were answering, finalize as answer. If thinking, finalize as thinking.
+                if is_answering:
+                    active_live.update(render_panel(current_segment_text, "Answer", "green", is_active=False))
+                else:
+                    active_live.update(render_panel(current_segment_text, "Thinking", "yellow", is_active=False))
                 active_live.stop()
                 active_live = None
             current_segment_text = ""
+            is_answering = False
             
-            # Start new live display for new generation
+            # Start new live display for new generation (default to Thinking)
             active_live = Live(
-                render_thinking_panel("", is_active=True),
+                render_panel("", "Thinking", "yellow", is_active=True),
                 console=console,
                 auto_refresh=True,
                 refresh_per_second=10,
@@ -216,25 +179,68 @@ async def chat_loop(
                 current_segment_text += new_chunk
                 last_processed_text_len = len(text)
                 
-                # Start live display if not active
-                if not active_live:
-                    active_live = Live(
-                        render_thinking_panel(current_segment_text, is_active=True),
-                        console=console,
-                        auto_refresh=True,
-                        refresh_per_second=10,
-                        vertical_overflow="visible" # Allow scrolling
-                    )
-                    active_live.start()
+                # Check for answer tag split
+                answer_match = re.search(r'(?s)(.*)<answer>(.*)', current_segment_text)
+                
+                if answer_match:
+                    thinking_text = answer_match.group(1)
+                    answer_text = answer_match.group(2).replace("</answer>", "")
+                    
+                    if not is_answering:
+                        # Transition from Thinking to Answering detected!
+                        if active_live:
+                            # Finalize thinking panel
+                            active_live.update(render_panel(thinking_text, "Thinking", "yellow", is_active=False))
+                            active_live.stop()
+                        
+                        # Start new live display for Answer
+                        is_answering = True
+                        current_segment_text = answer_text # Update current segment to be just the answer part? 
+                        # Wait, if we update current_segment_text, we need to be careful about the text stream.
+                        # The text stream `text` keeps growing. `current_segment_text` accumulates `new_chunk`.
+                        # If we modify `current_segment_text`, we might mess up if `text` is re-sent?
+                        # Actually `text` passed to this function is the full text.
+                        # But we only use `text` to calculate `new_chunk`.
+                        # So it's safe to reset `current_segment_text` to just the answer part
+                        # PROVIDED we don't need the thinking part anymore for this segment.
+                        
+                        current_segment_text = answer_text
+                        
+                        active_live = Live(
+                            render_panel(current_segment_text, "Answer", "green", is_active=True, spinner_text="Generating Answer..."),
+                            console=console,
+                            auto_refresh=True,
+                            refresh_per_second=10,
+                            vertical_overflow="visible"
+                        )
+                        active_live.start()
+                    else:
+                        # Already answering, just update content
+                        current_segment_text = answer_text # Update with latest answer text
+                        active_live.update(render_panel(current_segment_text, "Answer", "green", is_active=True, spinner_text="Generating Answer..."))
+                
                 else:
-                    active_live.update(render_thinking_panel(current_segment_text, is_active=True))
+                    # No answer tag yet
+                    if not active_live:
+                         active_live = Live(
+                            render_panel(current_segment_text, "Thinking", "yellow", is_active=True),
+                            console=console,
+                            auto_refresh=True,
+                            refresh_per_second=10,
+                            vertical_overflow="visible"
+                        )
+                         active_live.start()
+                    else:
+                        active_live.update(render_panel(current_segment_text, "Thinking", "yellow", is_active=True))
         
         # Handle tool calls
         if tool_calls:
             # Finalize current thinking block
             if active_live:
-                # Update with static title (remove spinner)
-                active_live.update(render_thinking_panel(current_segment_text, is_active=False))
+                if is_answering:
+                     active_live.update(render_panel(current_segment_text, "Answer", "green", is_active=False))
+                else:
+                     active_live.update(render_panel(current_segment_text, "Thinking", "yellow", is_active=False))
                 active_live.stop()
                 active_live = None
             
@@ -244,8 +250,6 @@ async def chat_loop(
                 console.print(f"\n[bold magenta]Tool Call: {tool_name}[/bold magenta]")
                 
                 output = tool_call.output
-                if len(output) > 500:
-                    output = output[:500] + "... [truncated]"
                 
                 output = clean_text(output)
                 console.print(Panel(output, title="[green]Output[/green]", border_style="green"))
@@ -253,10 +257,11 @@ async def chat_loop(
             # Reset segment for next block (next iteration)
             current_segment_text = ""
             last_processed_text_len = 0 # Reset text tracking for new iteration
+            is_answering = False # Reset answering state
             
             # Immediately start a new live display for the next thinking segment
             active_live = Live(
-                render_thinking_panel("", is_active=True),
+                render_panel("", "Thinking", "yellow", is_active=True),
                 console=console,
                 auto_refresh=True,
                 refresh_per_second=10,
@@ -285,7 +290,7 @@ async def chat_loop(
             
             # Start initial live display to show "Thinking" immediately
             active_live = Live(
-                render_thinking_panel("", is_active=True),
+                render_panel("", "Thinking", "yellow", is_active=True),
                 console=console,
                 auto_refresh=True,
                 refresh_per_second=10,
@@ -303,7 +308,10 @@ async def chat_loop(
             
             # Finalize any remaining live display
             if active_live:
-                active_live.update(render_thinking_panel(current_segment_text, is_active=False))
+                if is_answering:
+                    active_live.update(render_panel(current_segment_text, "Answer", "green", is_active=False))
+                else:
+                    active_live.update(render_panel(current_segment_text, "Thinking", "yellow", is_active=False))
                 active_live.stop()
                 active_live = None
             
