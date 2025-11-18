@@ -13,6 +13,7 @@ Example usage:
 
 import asyncio
 import sys
+import time
 from pathlib import Path
 from typing import Optional
 
@@ -75,6 +76,7 @@ async def chat_loop(
     workflow: AutoReasonSearchWorkflow,
     dataset_name: Optional[str] = None,
     verbose: bool = False,
+    show_full_tool_output: bool = False,
 ):
     """Run the interactive chat loop using the auto_search workflow."""
     console.print("\n[bold green]Starting interactive auto_search chat session[/bold green]")
@@ -84,6 +86,17 @@ async def chat_loop(
         console.print(f"[dim]Using dataset configuration: {dataset_name}[/dim]\n")
 
     import re
+
+    # Loading text variations
+    LOADING_TEXTS = [
+        "Infodigging", "Factgrabbing", "Knowledging", "Studifying", 
+        "Learninating", "Wisdomizing", "Thoughtsifting", "Bookworming", 
+        "Researching", "Cognitating", "Discoverifying", "Deepthinking", 
+        "Sciencifying", "Scholarizing", "Ideahunting", "Thinkworking", 
+        "Smartifying", "Conclusionizing", "Insightfarming", "Infohoovering", 
+        "Factstacking", "Databinging", "Factsniffing", "Mindcooking", 
+        "Factweaving", "Infopiling"
+    ]
 
     # State for segmented live display
     last_processed_text_len = 0
@@ -130,7 +143,10 @@ async def chat_loop(
             renderables.append(panel)
         
         if not content and title == "Thinking":
-            spinner_text = "Researching..."
+            # Rotate loading text every 30 seconds
+            # Use integer division of current time to get an index
+            index = int(time.time() / 30) % len(LOADING_TEXTS)
+            spinner_text = f"{LOADING_TEXTS[index]}..."
 
         # Add spinner at the bottom if active
         if is_active:
@@ -250,6 +266,8 @@ async def chat_loop(
                 console.print(f"\n[bold magenta]Tool Call: {tool_name}[/bold magenta]")
                 
                 output = tool_call.output
+                if not show_full_tool_output and len(output) > 500:
+                    output = output[:500] + "... [truncated]"
                 
                 output = clean_text(output)
                 console.print(Panel(output, title="[green]Output[/green]", border_style="green"))
@@ -367,6 +385,7 @@ def chat(
     dataset_name: Optional[str] = None,
     verbose: bool = False,
     config_overrides: Optional[str] = None,
+    show_full_tool_output: bool = False,
 ):
     """
     Start an interactive chat session using the auto_search workflow.
@@ -376,6 +395,7 @@ def chat(
         dataset_name: Optional dataset name for dataset-specific instructions
         verbose: Enable verbose output
         config_overrides: Comma-separated config overrides (e.g., 'param1=value1,param2=value2')
+        show_full_tool_output: Show full tool output instead of truncating
     """
     # Parse config overrides
     overrides = {}
@@ -422,7 +442,7 @@ def chat(
     
     # Run chat loop
     try:
-        asyncio.run(chat_loop(workflow, dataset_name=dataset_name, verbose=verbose))
+        asyncio.run(chat_loop(workflow, dataset_name=dataset_name, verbose=verbose, show_full_tool_output=show_full_tool_output))
     except KeyboardInterrupt:
         console.print("\n[bold yellow]Interrupted. Exiting.[/bold yellow]")
         sys.exit(0)
@@ -451,6 +471,11 @@ if __name__ == "__main__":
                 "-v",
                 help="Enable verbose output (shows tool calls and debugging info)",
             ),
+            show_full_tool_output: bool = typer.Option(
+                False,
+                "--show-full-tool-output",
+                help="Show full tool output instead of truncating to 500 chars",
+            ),
             config_overrides: Optional[str] = typer.Option(
                 None,
                 "--config-overrides",
@@ -463,6 +488,7 @@ if __name__ == "__main__":
                 dataset_name=dataset_name,
                 verbose=verbose,
                 config_overrides=config_overrides,
+                show_full_tool_output=show_full_tool_output,
             )
         
         app()
@@ -473,6 +499,7 @@ if __name__ == "__main__":
         parser.add_argument("--config", "-c", required=True, help="Path to workflow configuration YAML file")
         parser.add_argument("--dataset-name", "-d", help="Dataset name for dataset-specific instructions")
         parser.add_argument("--verbose", "-v", action="store_true", help="Verbose output")
+        parser.add_argument("--show-full-tool-output", action="store_true", help="Show full tool output instead of truncating to 500 chars")
         parser.add_argument("--config-overrides", help="Config overrides in format 'param1=value1,param2=value2'")
         args = parser.parse_args()
         
@@ -481,5 +508,6 @@ if __name__ == "__main__":
             dataset_name=args.dataset_name,
             verbose=args.verbose,
             config_overrides=args.config_overrides,
+            show_full_tool_output=args.show_full_tool_output,
         )
 
