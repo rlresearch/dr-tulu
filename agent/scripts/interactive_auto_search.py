@@ -18,11 +18,13 @@ from typing import Optional
 
 try:
     import typer
-    from rich.console import Console
+    from rich.console import Console, Group
     from rich.markdown import Markdown
     from rich.text import Text
     from rich.panel import Panel
     from rich.prompt import Prompt
+    from rich.live import Live
+    from rich.spinner import Spinner
     HAS_RICH = True
 except ImportError:
     print("Warning: rich/typer not available. Install with: pip install typer rich")
@@ -81,52 +83,95 @@ async def chat_loop(
     if dataset_name:
         console.print(f"[dim]Using dataset configuration: {dataset_name}[/dim]\n")
 
-    # State for incremental printing
-    last_text_len = 0
+    import re
+
+    # State for segmented live display
+    last_processed_text_len = 0
+    current_segment_text = ""
+    active_live = None
+
+    # Helper to reduce newlines
+    def clean_text(t):
+        return re.sub(r'\n{3,}', '\n\n', t)
+    
+    # Helper to format citations with Rich markup
+    def format_citations(t):
+        def format_cite(match):
+            cite_id = match.group(2)
+            cite_content = match.group(3)
+            return f'[dim]<cite id="[/dim][dim cyan]{cite_id}[/dim cyan][dim]">[/dim][cyan bold]{cite_content}[/cyan bold][dim]</cite>[/dim]'
+        t = re.sub(r'<cite\s+id=(["\']?)([^"\'>\s]+)\1[^>]*>([^<]+)</cite>', format_cite, t)
+        return t
+        
+    # Helper to render the current thinking panel
+    def render_thinking_panel(content, is_active=True):
+        formatted = format_citations(content)
+        # Use Text.from_markup to support our citation colors + basic formatting
+        renderable = Text.from_markup(formatted)
+        
+        if is_active:
+            # Spinner + Title
+            title = Group(Spinner("dots", style="yellow"), Text(" Thinking", style="yellow"))
+        else:
+            title = "[yellow]Thinking[/yellow]"
+            
+        return Panel(
+            renderable,
+            title=title,
+            title_align="left",
+            border_style="yellow"
+        )
 
     # Define callback to print step updates
     def print_step_update(text, tool_calls):
-        nonlocal last_text_len
-        import re
+        nonlocal last_processed_text_len, current_segment_text, active_live
         
-        # Helper to format citations with Rich markup (preserves them)
-        def format_citations(t):
-            def format_cite(match):
-                cite_id = match.group(2)
-                cite_content = match.group(3)
-                return f'[dim]<cite id="[/dim][dim cyan]{cite_id}[/dim cyan][dim]">[/dim][cyan bold]{cite_content}[/cyan bold][dim]</cite>[/dim]'
-            
-            t = re.sub(r'<cite\s+id=(["\']?)([^"\'>\s]+)\1[^>]*>([^<]+)</cite>', format_cite, t)
-            return t
-            
-        # Helper to clean text for final output
-        def clean_text(t):
-            return re.sub(r'\n{3,}', '\n\n', t)
-
-        # Print new text chunks
-        if text and len(text) > last_text_len:
-            new_text = text[last_text_len:]
-            # Apply citation formatting to new text
-            # Note: This might split a citation tag if it crosses a chunk boundary, but it's rare and streaming usually handles tokens
-            formatted_new_text = format_citations(new_text)
-            
-            # We'll just print the stream directly with a thinking color
-            # It's hard to maintain the Panel structure with streaming text without Live display
-            # So we'll print raw text, but styled.
-            console.print(Text.from_markup(formatted_new_text), end="")
-            last_text_len = len(text)
+        # Handle text updates
+        if text and len(text) > last_processed_text_len:
+            new_chunk = text[last_processed_text_len:]
+            # Check if this chunk is just a newline after a tool call, skip if so to avoid empty boxes
+            if not current_segment_text and not new_chunk.strip():
+                last_processed_text_len = len(text)
+            else:
+                current_segment_text += new_chunk
+                last_processed_text_len = len(text)
+                
+                # Start live display if not active
+                if not active_live:
+                    active_live = Live(
+                        render_thinking_panel(current_segment_text, is_active=True),
+                        console=console,
+                        auto_refresh=True,
+                        refresh_per_second=10,
+                        vertical_overflow="visible" # Allow scrolling
+                    )
+                    active_live.start()
+                else:
+                    active_live.update(render_thinking_panel(current_segment_text, is_active=True))
         
-        # Print tool calls (these are new events)
-        for tool_call in tool_calls:
-            tool_name = tool_call.tool_name
-            console.print(f"\n\n[bold magenta]Tool Call: {tool_name}[/bold magenta]")
+        # Handle tool calls
+        if tool_calls:
+            # Finalize current thinking block
+            if active_live:
+                # Update with static title (remove spinner)
+                active_live.update(render_thinking_panel(current_segment_text, is_active=False))
+                active_live.stop()
+                active_live = None
             
-            output = tool_call.output
-            if len(output) > 500:
-                output = output[:500] + "... [truncated]"
-            
-            output = clean_text(output)
-            console.print(Panel(output, title="[green]Output[/green]", border_style="green"))
+            # Print tool calls
+            for tool_call in tool_calls:
+                tool_name = tool_call.tool_name
+                console.print(f"\n[bold magenta]Tool Call: {tool_name}[/bold magenta]")
+                
+                output = tool_call.output
+                if len(output) > 500:
+                    output = output[:500] + "... [truncated]"
+                
+                output = clean_text(output)
+                console.print(Panel(output, title="[green]Output[/green]", border_style="green"))
+                
+            # Reset segment for next block
+            current_segment_text = ""
 
     while True:
         try:
@@ -141,10 +186,11 @@ async def chat_loop(
                 continue
             
             # Reset state
-            last_text_len = 0
+            last_processed_text_len = 0
+            current_segment_text = ""
+            active_live = None
             
             console.print("\n[bold blue]Search & Reasoning Trace:[/bold blue]")
-            console.print("[dim]Thinking...[/dim]") # Initial indicator
             
             # Run workflow
             result = await workflow(
@@ -153,6 +199,12 @@ async def chat_loop(
                 verbose=verbose,
                 step_callback=print_step_update,
             )
+            
+            # Finalize any remaining live display
+            if active_live:
+                active_live.update(render_thinking_panel(current_segment_text, is_active=False))
+                active_live.stop()
+                active_live = None
             
             # Don't print final_response again - it's already been printed via step_callback
             
