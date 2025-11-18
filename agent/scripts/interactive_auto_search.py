@@ -18,12 +18,11 @@ from typing import Optional
 
 try:
     import typer
-    from rich.console import Console, Group
+    from rich.console import Console
     from rich.markdown import Markdown
     from rich.text import Text
     from rich.panel import Panel
     from rich.prompt import Prompt
-    from rich.live import Live
     HAS_RICH = True
 except ImportError:
     print("Warning: rich/typer not available. Install with: pip install typer rich")
@@ -82,27 +81,13 @@ async def chat_loop(
     if dataset_name:
         console.print(f"[dim]Using dataset configuration: {dataset_name}[/dim]\n")
 
-    # State for live display
-    current_text = ""
-    all_tool_outputs = []
-    live_display = None
+    # State for incremental printing
+    last_text_len = 0
 
     # Define callback to print step updates
     def print_step_update(text, tool_calls):
-        nonlocal current_text, live_display
+        nonlocal last_text_len
         import re
-        
-        if text:
-            current_text = text
-        if tool_calls:
-            all_tool_outputs.extend(tool_calls)
-            
-        if not live_display:
-            return
-
-        # Helper to reduce newlines
-        def clean_text(t):
-            return re.sub(r'\n{3,}', '\n\n', t)
         
         # Helper to format citations with Rich markup (preserves them)
         def format_citations(t):
@@ -113,58 +98,35 @@ async def chat_loop(
             
             t = re.sub(r'<cite\s+id=(["\']?)([^"\'>\s]+)\1[^>]*>([^<]+)</cite>', format_cite, t)
             return t
-        
-        # Helper to check if text only contains tool calls
-        def is_only_tool_call(t):
-            t = t.strip()
-            # Robust check for streaming: starts with <call_tool
-            if t.startswith("<call_tool"):
-                # Check if there's any non-tool content after removing complete tool calls
-                stripped = re.sub(r'<call_tool[^>]*>.*?</call_tool>', '', t, flags=re.DOTALL).strip()
-                # If stripped is empty OR stripped is just an incomplete tag start, it's tool call only
-                if not stripped or stripped.startswith("<call_tool"):
-                    return True
-            return False
             
-        # Build renderables
-        renderables = []
-        
-        # Process text
-        if current_text:
-            text_content = clean_text(current_text)
+        # Helper to clean text for final output
+        def clean_text(t):
+            return re.sub(r'\n{3,}', '\n\n', t)
+
+        # Print new text chunks
+        if text and len(text) > last_text_len:
+            new_text = text[last_text_len:]
+            # Apply citation formatting to new text
+            # Note: This might split a citation tag if it crosses a chunk boundary, but it's rare and streaming usually handles tokens
+            formatted_new_text = format_citations(new_text)
             
-            if is_only_tool_call(text_content):
-                panel_title = "[yellow]Tool Call[/yellow]"
-            else:
-                panel_title = "[yellow]Thinking[/yellow]"
-            
-            if "<think>" in text_content:
-                parts = text_content.split("</think>")
-                think = parts[0].replace("<think>", "").strip()
-                think = format_citations(think)
-                renderables.append(Panel(think, title=panel_title, border_style="yellow"))
-                
-                if len(parts) > 1 and parts[1].strip():
-                    remaining = clean_text(parts[1].strip())
-                    remaining = format_citations(remaining)
-                    renderables.append(Panel(remaining, title=panel_title, border_style="yellow"))
-            else:
-                formatted_text = format_citations(text_content)
-                renderables.append(Panel(formatted_text, title=panel_title, border_style="yellow"))
+            # We'll just print the stream directly with a thinking color
+            # It's hard to maintain the Panel structure with streaming text without Live display
+            # So we'll print raw text, but styled.
+            console.print(Text.from_markup(formatted_new_text), end="")
+            last_text_len = len(text)
         
-        # Process tool outputs
-        for tool_call in all_tool_outputs:
+        # Print tool calls (these are new events)
+        for tool_call in tool_calls:
             tool_name = tool_call.tool_name
-            renderables.append(Text(f"\nTool Call: {tool_name}", style="bold magenta"))
+            console.print(f"\n\n[bold magenta]Tool Call: {tool_name}[/bold magenta]")
             
             output = tool_call.output
             if len(output) > 500:
                 output = output[:500] + "... [truncated]"
             
             output = clean_text(output)
-            renderables.append(Panel(output, title="[green]Output[/green]", border_style="green"))
-            
-        live_display.update(Group(*renderables))
+            console.print(Panel(output, title="[green]Output[/green]", border_style="green"))
 
     while True:
         try:
@@ -179,30 +141,18 @@ async def chat_loop(
                 continue
             
             # Reset state
-            current_text = ""
-            all_tool_outputs = []
+            last_text_len = 0
             
             console.print("\n[bold blue]Search & Reasoning Trace:[/bold blue]")
+            console.print("[dim]Thinking...[/dim]") # Initial indicator
             
-            # Use Live display for streaming updates
-            if HAS_RICH:
-                with Live(Group(), console=console, refresh_per_second=4) as live:
-                    live_display = live
-                    result = await workflow(
-                        problem=user_input,
-                        dataset_name=dataset_name,
-                        verbose=verbose,
-                        step_callback=print_step_update,
-                    )
-                    live_display = None
-            else:
-                # Fallback for non-rich environments
-                result = await workflow(
-                    problem=user_input,
-                    dataset_name=dataset_name,
-                    verbose=verbose,
-                    step_callback=print_step_update,
-                )
+            # Run workflow
+            result = await workflow(
+                problem=user_input,
+                dataset_name=dataset_name,
+                verbose=verbose,
+                step_callback=print_step_update,
+            )
             
             # Don't print final_response again - it's already been printed via step_callback
             
