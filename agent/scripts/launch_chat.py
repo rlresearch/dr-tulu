@@ -233,14 +233,14 @@ Examples:
   python scripts/launch_chat.py --no-auto-launch
 
   # Custom config file
-  python scripts/launch_chat.py --config workflows/trained/auto_search_sft.yaml
+  python scripts/launch_chat.py --config workflows/auto_search_sft.yaml
         """.strip()
     )
     
     parser.add_argument(
         "--config", "-c",
-        default="workflows/trained/auto_search_sft.yaml",
-        help="Config file path (default: workflows/trained/auto_search_sft.yaml)"
+        default="workflows/auto_search_sft.yaml",
+        help="Config file path (default: workflows/auto_search_sft.yaml)"
     )
     parser.add_argument(
         "--dataset-name", "-d",
@@ -285,6 +285,19 @@ Examples:
     args = parser.parse_args()
     
     print("=== Interactive Chat Launcher ===\n")
+    
+    # Resolve config path relative to script directory (agent/scripts/)
+    script_dir = Path(__file__).parent
+    agent_dir = script_dir.parent
+    config_path = Path(args.config)
+    if not config_path.is_absolute():
+        # Try relative to agent directory first
+        resolved_config_path = agent_dir / config_path
+        # If that doesn't exist, try relative to current directory
+        if not resolved_config_path.exists():
+            resolved_config_path = config_path
+    else:
+        resolved_config_path = config_path
     
     processes = {"mcp": None, "vllm_search": None, "vllm_browse": None}
     
@@ -348,10 +361,10 @@ Examples:
         # Read config file to get all settings
         try:
             import yaml
-            with open(args.config, 'r') as f:
+            with open(resolved_config_path, 'r') as f:
                 config_data = yaml.safe_load(f)
         except Exception as e:
-            print(f"⚠ Warning: Could not read config file: {e}")
+            print(f"⚠ Warning: Could not read config file {resolved_config_path}: {e}")
             config_data = {}
         
         # Get settings from config, override with command line args if provided
@@ -399,7 +412,7 @@ Examples:
                     print(f"   CUDA_VISIBLE_DEVICES={browse_gpu} vllm serve {browse_model} --port {port} --dtype auto --max-model-len 40960")
     
     # Build command for interactive_auto_search.py
-    cmd = [sys.executable, "scripts/interactive_auto_search.py", "--config", args.config]
+    cmd = [sys.executable, "scripts/interactive_auto_search.py", "--config", str(resolved_config_path)]
     
     if args.dataset_name:
         cmd.extend(["--dataset-name", args.dataset_name])
