@@ -23,7 +23,7 @@ number_documents_to_search: 10
 search_timeout: 180
 
 # Browse tool configuration
-browse_tool_name: "crawl4ai"
+browse_tool_name: "jina"
 browse_timeout: 180
 browse_max_pages_to_fetch: 10
 browse_context_char_length: 6000

@@ -75,9 +75,6 @@ async def chat_loop(
 ):
     """Run the interactive chat loop using the auto_search workflow."""
     console.print("\n[bold green]Starting interactive auto_search chat session[/bold green]")
-    console.print("[bold cyan]Using the same pipeline as auto_search:[/bold cyan]")
-    console.print("  [dim]1. SearchAgent searches and reasons with tools[/dim]")
-    console.print("  [dim]2. AnswerAgent generates final answer from search results[/dim]")
     console.print("\n[dim]Type 'exit' or 'quit' to end the session[/dim]\n")
     
     if dataset_name:
