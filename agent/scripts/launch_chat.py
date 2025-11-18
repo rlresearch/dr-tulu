@@ -60,12 +60,11 @@ def launch_mcp_server(port: int = 8000) -> Optional[subprocess.Popen]:
     env = os.environ.copy()
     env["MCP_CACHE_DIR"] = f".cache-{os.uname().nodename if hasattr(os, 'uname') else 'localhost'}"
     
-    # Launch MCP server
+    # Launch MCP server - stream output to stdout for visibility
     try:
+        print(f"📋 MCP server output will be shown below:")
         process = subprocess.Popen(
             [sys.executable, "-m", "dr_agent.mcp_backend.main", "--port", str(port)],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
             env=env,
             preexec_fn=os.setsid if hasattr(os, 'setsid') else None,
         )
@@ -82,10 +81,7 @@ def launch_mcp_server(port: int = 8000) -> Optional[subprocess.Popen]:
             print(f"⚠ MCP server process started but port check failed. Continuing anyway...")
             return process
         else:
-            stdout, stderr = process.communicate()
             print(f"❌ MCP server failed to start (exit code: {process.returncode})")
-            if stderr:
-                print(f"Error: {stderr.decode()[:500]}")
             return None
             
     except Exception as e:
@@ -138,16 +134,41 @@ def launch_vllm_server(model_name: str, port: int, gpu_id: int = 0) -> Optional[
     """Launch vLLM server in background."""
     print(f"🚀 Launching vLLM server for model {model_name} on port {port}...")
     
-    # Check if vllm is available
+    # Try to find vllm command - check multiple options
     import shutil
-    vllm_cmd = shutil.which("vllm")
-    if not vllm_cmd:
-        print("❌ Error: vllm command not found. Please install vllm or launch it manually.")
+    vllm_base_cmd = None
+    
+    # Check if we're running through uv (check parent process or environment)
+    is_uv = (
+        "uv" in sys.executable.lower() or 
+        os.environ.get("UV_PROJECT_ENVIRONMENT") or
+        os.environ.get("VIRTUAL_ENV", "").endswith(".venv")
+    )
+    
+    # Try different ways to invoke vllm (in order of preference)
+    # 1. Try python -m vllm with current interpreter (works best with uv)
+    if sys.executable:
+        vllm_base_cmd = [sys.executable, "-m", "vllm"]
+    # 2. If running through uv, try uv run vllm
+    elif is_uv and shutil.which("uv"):
+        vllm_base_cmd = ["uv", "run", "vllm"]
+    # 3. Direct vllm command (if in PATH)
+    elif shutil.which("vllm"):
+        vllm_base_cmd = ["vllm"]
+    
+    if not vllm_base_cmd:
+        print("❌ Error: vllm command not found. Tried: vllm, uv run vllm, python -m vllm")
+        print("💡 Install vllm with: uv pip install -e '.[vllm]' or uv pip install 'dr_agent[vllm]'")
+        print("💡 Or launch the server manually:")
+        if is_uv and shutil.which("uv"):
+            print(f"   CUDA_VISIBLE_DEVICES={gpu_id} uv run vllm serve {model_name} --port {port} --dtype auto --max-model-len 40960")
+        else:
+            print(f"   CUDA_VISIBLE_DEVICES={gpu_id} vllm serve {model_name} --port {port} --dtype auto --max-model-len 40960")
         return None
     
     # Build vLLM command
-    cmd = [
-        vllm_cmd, "serve", model_name,
+    cmd = vllm_base_cmd + [
+        "serve", model_name,
         "--port", str(port),
         "--dtype", "auto",
         "--max-model-len", "40960"
@@ -159,38 +180,37 @@ def launch_vllm_server(model_name: str, port: int, gpu_id: int = 0) -> Optional[
         env["CUDA_VISIBLE_DEVICES"] = str(gpu_id)
     
     try:
+        print(f"📋 vLLM output for {model_name} will be shown below (loading may take a few minutes):")
+        # Stream output directly to stdout/stderr so user sees loading progress
         process = subprocess.Popen(
             cmd,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
             env=env,
             preexec_fn=os.setsid if hasattr(os, 'setsid') else None,
         )
         
         # Wait for server to start (vLLM takes longer)
-        print("⏳ Waiting for vLLM server to start (this may take a minute)...")
-        for i in range(60):  # Wait up to 60 seconds
+        # Don't capture output, let it flow to terminal
+        print("⏳ Waiting for vLLM server to become ready...")
+        for i in range(300):  # Wait up to 5 minutes (loading large models takes time)
             time.sleep(1)
             if check_port(port):
                 print(f"✓ vLLM server started (PID: {process.pid})")
                 return process
             # Check if process died
             if process.poll() is not None:
-                stdout, stderr = process.communicate()
                 print(f"❌ vLLM server failed to start (exit code: {process.returncode})")
-                if stderr:
-                    print(f"Error: {stderr.decode()[:1000]}")
                 return None
+            
+            # Print status update every 30 seconds
+            if i > 0 and i % 30 == 0:
+                print(f"⏳ Still waiting for vLLM server ({i}s)...")
         
         # Check if process is still running
         if process.poll() is None:
-            print(f"⚠ vLLM server process started but port check failed. It may still be initializing...")
+            print(f"⚠ vLLM server process started but port check timed out. It may still be initializing...")
             return process
         else:
-            stdout, stderr = process.communicate()
             print(f"❌ vLLM server failed to start (exit code: {process.returncode})")
-            if stderr:
-                print(f"Error: {stderr.decode()[:1000]}")
             return None
             
     except Exception as e:
