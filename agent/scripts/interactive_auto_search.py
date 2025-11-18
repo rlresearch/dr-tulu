@@ -88,20 +88,57 @@ async def chat_loop(
         # Helper to reduce newlines
         def clean_text(t):
             return re.sub(r'\n{3,}', '\n\n', t)
+        
+        # Helper to format citations with Rich markup (preserves them)
+        def format_citations(text):
+            """Format citation tags with Rich markup so they're visible."""
+            def format_cite(match):
+                cite_id = match.group(2)
+                cite_content = match.group(3)
+                return f'[dim]<cite id="[/dim][dim cyan]{cite_id}[/dim cyan][dim]">[/dim][cyan bold]{cite_content}[/cyan bold][dim]</cite>[/dim]'
+            
+            # Match both <cite id="..."> and <cite id=...> formats
+            text = re.sub(
+                r'<cite\s+id=(["\']?)([^"\'>\s]+)\1[^>]*>([^<]+)</cite>',
+                format_cite,
+                text
+            )
+            return text
+        
+        # Helper to check if text only contains tool calls
+        def is_only_tool_call(text):
+            """Check if text only contains <call_tool> tags and no other content."""
+            # Remove whitespace and tool call tags
+            stripped = re.sub(r'<call_tool[^>]*>.*?</call_tool>', '', text, flags=re.DOTALL)
+            stripped = stripped.strip()
+            # If nothing remains except whitespace, it's only tool calls
+            return not stripped or stripped == ""
             
         # Print text generation (thought/reasoning)
         if text:
             text = clean_text(text)
+            
+            # Determine panel title based on content
+            if is_only_tool_call(text):
+                panel_title = "[yellow]Tool Call[/yellow]"
+            else:
+                panel_title = "[yellow]Thinking[/yellow]"
+            
             if "<think>" in text:
                 parts = text.split("</think>")
                 think = parts[0].replace("<think>", "").strip()
-                console.print(Panel(Markdown(think), title="[yellow]Thinking[/yellow]", border_style="yellow"))
+                # Format citations in thinking
+                think = format_citations(think)
+                console.print(Panel(think, title=panel_title, border_style="yellow"))
                 if len(parts) > 1 and parts[1].strip():
                     # Show remaining text also in Thinking box
-                    console.print(Panel(Markdown(clean_text(parts[1].strip())), title="[yellow]Thinking[/yellow]", border_style="yellow"))
+                    remaining = clean_text(parts[1].strip())
+                    remaining = format_citations(remaining)
+                    console.print(Panel(remaining, title=panel_title, border_style="yellow"))
             else:
-                # Show all regular text in Thinking box
-                console.print(Panel(Markdown(text), title="[yellow]Thinking[/yellow]", border_style="yellow"))
+                # Format citations and show all regular text
+                formatted_text = format_citations(text)
+                console.print(Panel(formatted_text, title=panel_title, border_style="yellow"))
         
         # Print tool calls
         for tool_call in tool_calls:
