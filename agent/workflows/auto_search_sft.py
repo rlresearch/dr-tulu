@@ -106,8 +106,8 @@ class SearchAgent(BaseAgent):
             elif "long_form" in str(dataset_name):
                 instruction_field_name = "long_form"
             else:
-                # print("set additional instructions none")
-                instruction_field_name = None
+                # Default to long_form when dataset_name is None
+                instruction_field_name = "long_form"
 
         return [
             {
@@ -165,9 +165,9 @@ class AnswerAgent(BaseAgent):
         elif dataset_name in ["healthbench", "deep_research_bench", "researchqa"]:
             instruction_field_name = "short_form"
         else:
-            # Default to short_form or None if dataset name is unknown/None
+            # Default to long_form when dataset name is unknown/None
             if dataset_name is None:
-                instruction_field_name = "short_form"  # Default behavior
+                instruction_field_name = "long_form"  # Default behavior
             else:
                 raise ValueError(f"Invalid dataset name: {dataset_name}")
 

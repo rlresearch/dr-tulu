@@ -97,9 +97,11 @@ async def chat_loop(
                 think = parts[0].replace("<think>", "").strip()
                 console.print(Panel(Markdown(think), title="[yellow]Thinking[/yellow]", border_style="yellow"))
                 if len(parts) > 1 and parts[1].strip():
-                    console.print(Markdown(clean_text(parts[1].strip())))
+                    # Show remaining text also in Thinking box
+                    console.print(Panel(Markdown(clean_text(parts[1].strip())), title="[yellow]Thinking[/yellow]", border_style="yellow"))
             else:
-                console.print(Markdown(text))
+                # Show all regular text in Thinking box
+                console.print(Panel(Markdown(text), title="[yellow]Thinking[/yellow]", border_style="yellow"))
         
         # Print tool calls
         for tool_call in tool_calls:
@@ -135,6 +137,7 @@ async def chat_loop(
             with console.status(status_msg, spinner="dots"):
                 console.print("\n[bold blue]Search & Reasoning Trace:[/bold blue]")
                 # Run the workflow - this is the EXACT same pipeline as auto_search
+                # The step_callback will print all output as it's generated, including the final answer
                 result = await workflow(
                     problem=user_input,
                     dataset_name=dataset_name,
@@ -142,55 +145,7 @@ async def chat_loop(
                     step_callback=print_step_update,
                 )
             
-            console.print("\n[dim]Generating final answer...[/dim]")
-            
-            # Extract final response (post-processed by the workflow)
-            final_response = result.get("final_response", "")
-            
-            # Display response
-            console.print("\n[bold blue]Assistant[/bold blue]")
-            if HAS_RICH:
-                import re
-                
-                # Helper to format text with preserved and highlighted citation tags
-                def format_with_citations(text):
-                    """Format text preserving citation tags with Rich markup."""
-                    # Replace citation tags with Rich markup that will be visible
-                    def format_cite(match):
-                        # Group 1: quote char, Group 2: cite_id, Group 3: cite_content
-                        cite_id = match.group(2)
-                        cite_content = match.group(3)
-                        # Return Rich markup that preserves the tag structure
-                        return f'[dim]<cite id="[/dim][dim cyan]{cite_id}[/dim cyan][dim]">[/dim][cyan bold]{cite_content}[/cyan bold][dim]</cite>[/dim]'
-                    
-                    # Match both <cite id="..."> and <cite id=...> formats
-                    # Group 1: optional quote, Group 2: cite_id, Group 3: cite_content
-                    text = re.sub(
-                        r'<cite\s+id=(["\']?)([^"\'>\s]+)\1[^>]*>([^<]+)</cite>',
-                        format_cite,
-                        text
-                    )
-                    return text
-                
-                # Check for <think> tags in final response
-                if "<think>" in final_response:
-                    parts = final_response.split("</think>")
-                    think = parts[0].replace("<think>", "").strip()
-                    console.print(Panel(Markdown(think), title="[yellow]Final Reasoning[/yellow]", border_style="yellow"))
-                    if len(parts) > 1:
-                        answer_text = parts[1].strip()
-                        # Format citations and render
-                        answer_formatted = format_with_citations(answer_text)
-                        # Use Text.from_markup to render Rich markup, then Markdown for the rest
-                        # Actually, let's render markdown first, then apply citation formatting
-                        # For now, just print with markup - citations will be visible
-                        console.print(Panel(answer_formatted, border_style="blue"))
-                else:
-                    # Format and render final response with preserved citations
-                    response_formatted = format_with_citations(final_response)
-                    console.print(Panel(response_formatted, border_style="blue"))
-            else:
-                console.print(f"\n{final_response}\n")
+            # Don't print final_response again - it's already been printed via step_callback
             
             # Show detailed tool usage info
             browsed_links = result.get("browsed_links", [])
