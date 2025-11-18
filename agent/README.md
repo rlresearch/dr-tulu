@@ -67,21 +67,39 @@ The interactive chat script runs the **exact same pipeline as `auto_search`** in
 
 ### Quick Start (Recommended)
 
-Use the self-contained launcher that automatically checks and launches required services:
+Use the self-contained launcher - it automatically handles everything:
 
 ```bash
-# Basic usage (auto-launches MCP server if needed)
-python scripts/launch_chat.py
+# Simplest usage - just specify your model (auto-launches everything)
+python scripts/launch_chat.py --model rl-research/DR-Tulu-8B
 
-# With a specific model
-python scripts/launch_chat.py --model hosted_vllm/rl-research/DR-Tulu-8B --base-url http://localhost:30001/v1
+# That's it! The launcher will:
+# - Auto-launch MCP server if needed
+# - Auto-launch Search Agent vLLM server on GPU 0
+# - Auto-launch Browse Agent vLLM server on GPU 1 (if enabled in config)
+# - Use ports and models from config file automatically
 
 # With dataset-specific instructions
-python scripts/launch_chat.py --dataset-name sqav2
+python scripts/launch_chat.py --model rl-research/DR-Tulu-8B --dataset-name sqav2
 
 # Skip service checks (if services are already running)
 python scripts/launch_chat.py --skip-checks
+
+# Don't auto-launch vLLM servers (just check if they're running)
+python scripts/launch_chat.py --model rl-research/DR-Tulu-8B --no-auto-launch
 ```
+
+**What the launcher does automatically:**
+- ✅ **MCP Server**: Checks and launches if needed
+- ✅ **Search Agent vLLM**: Reads config, checks if running, auto-launches on GPU 0 if needed
+- ✅ **Browse Agent vLLM**: Reads config, checks if running, auto-launches on GPU 1 if needed (if `use_browse_agent=true`)
+- ✅ **Cleanup**: Automatically stops all launched services when chat exits
+
+**How it works:**
+- Reads `search_agent_base_url`, `browse_agent_base_url`, and `use_browse_agent` from config file
+- Uses `search_agent_model_name` and `browse_agent_model_name` from config (or override with `--model`)
+- Automatically assigns GPUs: Search Agent → GPU 0, Browse Agent → GPU 1
+- Extracts ports from base URLs automatically
 
 ### Manual Usage
 
@@ -96,7 +114,7 @@ python scripts/interactive_auto_search.py --config workflows/trained/auto_search
 
 # With a specific model (override search_agent_model_name and base_url)
 python scripts/interactive_auto_search.py --config workflows/trained/auto_search_sft.yaml \
-    --config-overrides "search_agent_model_name=hosted_vllm/rl-research/DR-Tulu-8B,search_agent_base_url=http://localhost:30001/v1"
+    --config-overrides "search_agent_model_name=rl-research/DR-Tulu-8B,search_agent_base_url=http://localhost:30001/v1"
 
 # With config overrides (multiple parameters)
 python scripts/interactive_auto_search.py --config workflows/trained/auto_search_sft.yaml \
