@@ -91,7 +91,7 @@ class SearchAgent(BaseAgent):
             instruction_field_name = "long_form"
         elif dataset_name in ["healthbench", "deep_research_bench", "researchqa"]:
             instruction_field_name = "short_form"
-        elif "sft-mix" in dataset_name:
+        elif dataset_name and "sft-mix" in dataset_name:
             if "short_form" in dataset_name:
                 instruction_field_name = "exact_answer"
             elif "long_form" in dataset_name:
@@ -165,7 +165,11 @@ class AnswerAgent(BaseAgent):
         elif dataset_name in ["healthbench", "deep_research_bench", "researchqa"]:
             instruction_field_name = "short_form"
         else:
-            raise ValueError(f"Invalid dataset name: {dataset_name}")
+            # Default to short_form or None if dataset name is unknown/None
+            if dataset_name is None:
+                instruction_field_name = "short_form"  # Default behavior
+            else:
+                raise ValueError(f"Invalid dataset name: {dataset_name}")
 
         return [
             {
