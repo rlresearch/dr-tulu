@@ -1,0 +1,80 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "dr-agent"
+version = "0.1.0"
+description = "dr-agent-lib is an agent library for building deep research agents"
+authors = [
+    {name = "Shannon Shen", email = "zejiang@gmail.com"},
+    {name = "Rulin Shao", email = "rulins@cs.washington.edu"}
+]
+readme = "README.md"
+license = {text = "MIT"}
+requires-python = ">=3.10"
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+keywords = ["agents", "ai", "research", "tools", "rag", "deep-research"]
+
+dependencies = [
+    "fastmcp==2.11.3",
+    "python-dotenv",
+    "requests",
+    "pydantic",
+    "tinydb",
+    "tinydb-serialization",
+    "tenacity",
+    "beautifulsoup4",
+    "pdfplumber",
+    "lxml",
+    "aiohttp",
+    "chardet",
+    "nltk",
+    "crawl4ai",
+    "pyyaml",
+    "transformers",
+    "blobfile",
+    "cohere",
+    "litellm",
+    "diskcache",
+    "typer",
+    "omegaconf",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "pytest-asyncio",
+    "build",
+    "twine",
+]
+vllm = [
+    "vllm",
+]
+all = [
+    "vllm",
+]
+
+[tool.setuptools.packages.find]
+include = ["dr_agent*"]
+exclude = ["tests*", "docs*"]
+
+[tool.setuptools.package-data]
+"dr_agent.shared_prompts" = ["*.txt", "*.yaml"]
+
+[tool.pytest.ini_options]
+testpaths = "tests"
+addopts = "-v --tb=short"
+markers = "integration: tests requiring real API access"
+asyncio_mode = "auto"
