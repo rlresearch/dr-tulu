@@ -146,18 +146,18 @@ def launch_vllm_server(model_name: str, port: int, gpu_id: int = 0) -> Optional[
     )
     
     # Try different ways to invoke vllm (in order of preference)
-    # 1. Try python -m vllm with current interpreter (works best with uv)
-    if sys.executable:
-        vllm_base_cmd = [sys.executable, "-m", "vllm"]
-    # 2. If running through uv, try uv run vllm
+    # 1. Try direct vllm command first (most reliable)
+    if shutil.which("vllm"):
+        vllm_base_cmd = ["vllm", "serve"]
+    # 2. Try uv run vllm if in uv environment
     elif is_uv and shutil.which("uv"):
-        vllm_base_cmd = ["uv", "run", "vllm"]
-    # 3. Direct vllm command (if in PATH)
-    elif shutil.which("vllm"):
-        vllm_base_cmd = ["vllm"]
+        vllm_base_cmd = ["uv", "run", "vllm", "serve"]
+    # 3. Try python -m vllm.entrypoints.openai.api_server (module syntax)
+    elif sys.executable:
+        vllm_base_cmd = [sys.executable, "-m", "vllm.entrypoints.openai.api_server"]
     
     if not vllm_base_cmd:
-        print("❌ Error: vllm command not found. Tried: vllm, uv run vllm, python -m vllm")
+        print("❌ Error: vllm command not found. Tried: vllm, uv run vllm, python -m vllm.entrypoints.openai.api_server")
         print("💡 Install vllm with: uv pip install -e '.[vllm]' or uv pip install 'dr_agent[vllm]'")
         print("💡 Or launch the server manually:")
         if is_uv and shutil.which("uv"):
@@ -167,8 +167,9 @@ def launch_vllm_server(model_name: str, port: int, gpu_id: int = 0) -> Optional[
         return None
     
     # Build vLLM command
+    # Note: vllm_base_cmd already includes 'serve' or equivalent
     cmd = vllm_base_cmd + [
-        "serve", model_name,
+        model_name,
         "--port", str(port),
         "--dtype", "auto",
         "--max-model-len", "40960"
