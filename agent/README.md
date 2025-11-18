@@ -16,6 +16,15 @@ uv pip install -e .     # Install dev version
 uv pip install dr_agent # Install from pypi 
 ```
 
+Set up API keys via `.env` file:
+```bash
+S2_API_KEY=xxx
+SERPER_API_KEY=xxx
+```
+Note you will need to get these API keys from the respective services.
+- S2_API_KEY: https://api.semanticscholar.org/
+- SERPER_API_KEY: https://serper.dev/
+
 ## Getting started 
 
 1. Launch MCP Server 
