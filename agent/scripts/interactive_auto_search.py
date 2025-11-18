@@ -82,14 +82,21 @@ async def chat_loop(
 
     # Define callback to print step updates
     def print_step_update(text, tool_calls):
+        import re
+        
+        # Helper to reduce newlines
+        def clean_text(t):
+            return re.sub(r'\n{3,}', '\n\n', t)
+            
         # Print text generation (thought/reasoning)
         if text:
+            text = clean_text(text)
             if "<think>" in text:
                 parts = text.split("</think>")
                 think = parts[0].replace("<think>", "").strip()
                 console.print(Panel(Markdown(think), title="[yellow]Thinking[/yellow]", border_style="yellow"))
                 if len(parts) > 1 and parts[1].strip():
-                    console.print(Markdown(parts[1].strip()))
+                    console.print(Markdown(clean_text(parts[1].strip())))
             else:
                 console.print(Markdown(text))
         
@@ -103,6 +110,8 @@ async def chat_loop(
             if len(output) > 500:
                 output = output[:500] + "... [truncated]"
             
+            # Clean output too
+            output = clean_text(output)
             console.print(Panel(output, title="[green]Output[/green]", border_style="green"))
 
     while True:
