@@ -14,6 +14,7 @@ Example usage:
 import asyncio
 import sys
 import time
+import random
 from pathlib import Path
 from typing import Optional
 
@@ -143,10 +144,12 @@ async def chat_loop(
             renderables.append(panel)
         
         if not content and title == "Thinking":
-            # Rotate loading text every 30 seconds
-            # Use integer division of current time to get an index
-            index = int(time.time() / 30) % len(LOADING_TEXTS)
-            spinner_text = f"{LOADING_TEXTS[index]}..."
+            # Rotate loading text every 10 seconds randomly
+            # Seed random generator with time bucket to ensure consistency across renders within the same bucket
+            # but variety over time
+            bucket = int(time.time() / 10)
+            rng = random.Random(bucket)
+            spinner_text = f"{rng.choice(LOADING_TEXTS)}..."
 
         # Add spinner at the bottom if active
         if is_active:
