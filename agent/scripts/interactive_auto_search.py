@@ -80,24 +80,21 @@ async def chat_loop(
     if dataset_name:
         console.print(f"[dim]Using dataset configuration: {dataset_name}[/dim]\n")
 
-    # Define callback to print search results
-    def print_search_trace(results):
-        console.print("\n[bold blue]Search & Reasoning Trace:[/bold blue]")
-        
-        # Print initial thought if available
-        initial_text = results.generated_text.split("<tool")[0].strip()
-        if initial_text:
-            if "<think>" in initial_text:
-                parts = initial_text.split("</think>")
+    # Define callback to print step updates
+    def print_step_update(text, tool_calls):
+        # Print text generation (thought/reasoning)
+        if text:
+            if "<think>" in text:
+                parts = text.split("</think>")
                 think = parts[0].replace("<think>", "").strip()
                 console.print(Panel(Markdown(think), title="[yellow]Thinking[/yellow]", border_style="yellow"))
-                if len(parts) > 1:
+                if len(parts) > 1 and parts[1].strip():
                     console.print(Markdown(parts[1].strip()))
             else:
-                console.print(Markdown(initial_text))
+                console.print(Markdown(text))
         
         # Print tool calls
-        for tool_call in results.tool_calls:
+        for tool_call in tool_calls:
             tool_name = tool_call.tool_name
             console.print(f"\n[bold magenta]Tool Call: {tool_name}[/bold magenta]")
             
@@ -107,11 +104,6 @@ async def chat_loop(
                 output = output[:500] + "... [truncated]"
             
             console.print(Panel(output, title="[green]Output[/green]", border_style="green"))
-            
-            # Print reasoning after tool call if available (this logic is imperfect as we don't have mapping)
-            # But usually reasoning is interleaved.
-            
-        console.print("\n[dim]Generating final answer...[/dim]")
 
     while True:
         try:
@@ -131,13 +123,16 @@ async def chat_loop(
                 status_msg += "\n[dim]This uses the same SearchAgent → AnswerAgent pipeline as auto_search[/dim]"
             
             with console.status(status_msg, spinner="dots"):
+                console.print("\n[bold blue]Search & Reasoning Trace:[/bold blue]")
                 # Run the workflow - this is the EXACT same pipeline as auto_search
                 result = await workflow(
                     problem=user_input,
                     dataset_name=dataset_name,
                     verbose=verbose,
-                    search_callback=print_search_trace,
+                    step_callback=print_step_update,
                 )
+            
+            console.print("\n[dim]Generating final answer...[/dim]")
             
             # Extract final response (post-processed by the workflow)
             final_response = result.get("final_response", "")

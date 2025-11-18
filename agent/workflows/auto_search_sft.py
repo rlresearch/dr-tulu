@@ -436,6 +436,7 @@ class AutoReasonSearchWorkflow(BaseWorkflow):
         dataset_name: Optional[str] = None,
         verbose: bool = True,
         search_callback: Optional[Any] = None,
+        step_callback: Optional[Any] = None,
     ) -> Dict[str, Any]:
         cfg = self.configuration
         assert cfg is not None
@@ -463,6 +464,7 @@ class AutoReasonSearchWorkflow(BaseWorkflow):
             temperature=cfg.search_agent_temperature,
             max_tool_calls=cfg.search_agent_max_tool_calls,
             verbose=verbose,
+            on_step_callback=step_callback,
         )
 
         if search_callback:
@@ -530,6 +532,7 @@ class AutoReasonSearchWorkflow(BaseWorkflow):
             max_tokens=cfg.search_agent_max_tokens,
             temperature=cfg.search_agent_temperature,
             verbose=verbose,
+            on_step_callback=step_callback,
         )
 
         if verbose:
