@@ -114,6 +114,9 @@ async def chat_loop(
         # Check for <answer> tag to split content
         answer_match = re.search(r'(?s)(.*)<answer>(.*)', content)
         
+        renderables = []
+        spinner_text = "Thinking..."
+        
         if answer_match:
             thinking_content = answer_match.group(1)
             answer_content = answer_match.group(2)
@@ -130,43 +133,45 @@ async def chat_loop(
                 title_align="left",
                 border_style="yellow"
             )
+            renderables.append(thinking_panel)
             
             # Prepare Answer Panel
             formatted_answer = format_citations(answer_content)
             renderable_answer = Text.from_markup(formatted_answer)
             
-            if is_active:
-                title = Group(Spinner("dots", style="green"), Text(" Answer", style="green"))
-            else:
-                title = "[green]Answer[/green]"
-                 
             answer_panel = Panel(
                 renderable_answer,
-                title=title,
+                title="[green]Answer[/green]",
                 title_align="left",
                 border_style="green"
             )
+            renderables.append(answer_panel)
             
-            return Group(thinking_panel, answer_panel)
+            spinner_text = "Generating Answer..."
 
-        formatted = format_citations(content)
-        # Use Text.from_markup to support our citation colors + basic formatting
-        renderable = Text.from_markup(formatted)
-        
-        if is_active:
-            # Spinner + Title
-            # If content is empty, use "Researching..." to indicate loading
-            title_text = " Researching..." if not content.strip() else " Thinking"
-            title = Group(Spinner("dots", style="yellow"), Text(title_text, style="yellow"))
         else:
-            title = "[yellow]Thinking[/yellow]"
+            formatted = format_citations(content)
+            # Use Text.from_markup to support our citation colors + basic formatting
+            renderable = Text.from_markup(formatted)
             
-        return Panel(
-            renderable,
-            title=title,
-            title_align="left",
-            border_style="yellow"
-        )
+            thinking_panel = Panel(
+                renderable,
+                title="[yellow]Thinking[/yellow]",
+                title_align="left",
+                border_style="yellow"
+            )
+            renderables.append(thinking_panel)
+            
+            if not content.strip():
+                spinner_text = "Researching..."
+        
+        # Add spinner at the bottom if active
+        if is_active:
+            # Use a padding to separate spinner from panel
+            renderables.append(Text(" ")) 
+            renderables.append(Spinner("dots", text=spinner_text, style="cyan"))
+
+        return Group(*renderables)
 
     # Define callback to print step updates
     def print_step_update(text, tool_calls):
