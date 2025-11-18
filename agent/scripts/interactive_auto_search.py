@@ -214,14 +214,6 @@ async def chat_loop(
                         
                         # Start new live display for Answer
                         is_answering = True
-                        current_segment_text = answer_text # Update current segment to be just the answer part? 
-                        # Wait, if we update current_segment_text, we need to be careful about the text stream.
-                        # The text stream `text` keeps growing. `current_segment_text` accumulates `new_chunk`.
-                        # If we modify `current_segment_text`, we might mess up if `text` is re-sent?
-                        # Actually `text` passed to this function is the full text.
-                        # But we only use `text` to calculate `new_chunk`.
-                        # So it's safe to reset `current_segment_text` to just the answer part
-                        # PROVIDED we don't need the thinking part anymore for this segment.
                         
                         current_segment_text = answer_text
                         
@@ -235,6 +227,9 @@ async def chat_loop(
                         active_live.start()
                     else:
                         # Already answering, just update content
+                        # Be careful not to update if we already have a cleaner version?
+                        # No, current_segment_text accumulates, so we must re-extract answer part
+                        # to avoid duplicating "Answer" content if `answer_match` found it again in accumulated string
                         current_segment_text = answer_text # Update with latest answer text
                         active_live.update(render_panel(current_segment_text, "Answer", "green", is_active=True, spinner_text="Generating Answer..."))
                 
