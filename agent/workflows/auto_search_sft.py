@@ -435,6 +435,7 @@ class AutoReasonSearchWorkflow(BaseWorkflow):
         problem: str,
         dataset_name: Optional[str] = None,
         verbose: bool = True,
+        search_callback: Optional[Any] = None,
     ) -> Dict[str, Any]:
         cfg = self.configuration
         assert cfg is not None
@@ -463,6 +464,12 @@ class AutoReasonSearchWorkflow(BaseWorkflow):
             max_tool_calls=cfg.search_agent_max_tool_calls,
             verbose=verbose,
         )
+
+        if search_callback:
+            if asyncio.iscoroutinefunction(search_callback):
+                await search_callback(results)
+            else:
+                search_callback(results)
 
         browsed_links = []
         searched_links = []

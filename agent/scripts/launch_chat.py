@@ -60,17 +60,22 @@ def launch_mcp_server(port: int = 8000) -> Optional[subprocess.Popen]:
     env = os.environ.copy()
     env["MCP_CACHE_DIR"] = f".cache-{os.uname().nodename if hasattr(os, 'uname') else 'localhost'}"
     
-    # Launch MCP server - stream output to stdout for visibility
+    # Launch MCP server - log to file
+    log_file = Path(f"/tmp/mcp_server_{port}.log")
     try:
-        print(f"📋 MCP server output will be shown below:")
-        process = subprocess.Popen(
-            [sys.executable, "-m", "dr_agent.mcp_backend.main", "--port", str(port)],
-            env=env,
-            preexec_fn=os.setsid if hasattr(os, 'setsid') else None,
-        )
+        print(f"📋 MCP server output will be logged to {log_file}")
+        with open(log_file, "w") as f:
+            process = subprocess.Popen(
+                [sys.executable, "-m", "dr_agent.mcp_backend.main", "--port", str(port)],
+                stdout=f,
+                stderr=subprocess.STDOUT,
+                env=env,
+                preexec_fn=os.setsid if hasattr(os, 'setsid') else None,
+            )
         
         # Wait for server to start
-        for _ in range(10):  # Wait up to 5 seconds
+        print("⏳ Waiting for MCP server to start...")
+        for _ in range(20):  # Wait up to 10 seconds
             time.sleep(0.5)
             if check_port(port):
                 print(f"✓ MCP server started (PID: {process.pid})")
@@ -82,6 +87,7 @@ def launch_mcp_server(port: int = 8000) -> Optional[subprocess.Popen]:
             return process
         else:
             print(f"❌ MCP server failed to start (exit code: {process.returncode})")
+            print(f"Check logs: {log_file}")
             return None
             
     except Exception as e:
@@ -180,31 +186,47 @@ def launch_vllm_server(model_name: str, port: int, gpu_id: int = 0) -> Optional[
     if gpu_id is not None:
         env["CUDA_VISIBLE_DEVICES"] = str(gpu_id)
     
+    log_file = Path(f"/tmp/vllm_server_{port}.log")
     try:
-        print(f"📋 vLLM output for {model_name} will be shown below (loading may take a few minutes):")
-        # Stream output directly to stdout/stderr so user sees loading progress
-        process = subprocess.Popen(
-            cmd,
-            env=env,
-            preexec_fn=os.setsid if hasattr(os, 'setsid') else None,
-        )
+        print(f"📋 vLLM output for {model_name} will be logged to {log_file}")
+        print("⏳ Waiting for vLLM server to become ready (this may take a few minutes)...")
         
-        # Wait for server to start (vLLM takes longer)
-        # Don't capture output, let it flow to terminal
-        print("⏳ Waiting for vLLM server to become ready...")
-        for i in range(300):  # Wait up to 5 minutes (loading large models takes time)
-            time.sleep(1)
+        # Launch with output redirected to file
+        with open(log_file, "w") as f:
+            process = subprocess.Popen(
+                cmd,
+                stdout=f,
+                stderr=subprocess.STDOUT,
+                env=env,
+                preexec_fn=os.setsid if hasattr(os, 'setsid') else None,
+            )
+        
+        # Wait for server to start
+        start_time = time.time()
+        while time.time() - start_time < 300:  # Wait up to 5 minutes
             if check_port(port):
                 print(f"✓ vLLM server started (PID: {process.pid})")
                 return process
+            
             # Check if process died
             if process.poll() is not None:
                 print(f"❌ vLLM server failed to start (exit code: {process.returncode})")
+                print(f"Check logs: {log_file}")
+                # Print last few lines of log
+                try:
+                    with open(log_file, "r") as f:
+                        print("Last 10 lines of log:")
+                        print("".join(f.readlines()[-10:]))
+                except:
+                    pass
                 return None
             
+            time.sleep(2)
+            
             # Print status update every 30 seconds
-            if i > 0 and i % 30 == 0:
-                print(f"⏳ Still waiting for vLLM server ({i}s)...")
+            elapsed = int(time.time() - start_time)
+            if elapsed > 0 and elapsed % 30 == 0:
+                print(f"⏳ Still waiting for vLLM server ({elapsed}s)...")
         
         # Check if process is still running
         if process.poll() is None:

@@ -83,6 +83,39 @@ async def chat_loop(
     if dataset_name:
         console.print(f"[dim]Using dataset configuration: {dataset_name}[/dim]\n")
 
+    # Define callback to print search results
+    def print_search_trace(results):
+        console.print("\n[bold blue]Search & Reasoning Trace:[/bold blue]")
+        
+        # Print initial thought if available
+        initial_text = results.generated_text.split("<tool")[0].strip()
+        if initial_text:
+            if "<think>" in initial_text:
+                parts = initial_text.split("</think>")
+                think = parts[0].replace("<think>", "").strip()
+                console.print(Panel(Markdown(think), title="[yellow]Thinking[/yellow]", border_style="yellow"))
+                if len(parts) > 1:
+                    console.print(Markdown(parts[1].strip()))
+            else:
+                console.print(Markdown(initial_text))
+        
+        # Print tool calls
+        for tool_call in results.tool_calls:
+            tool_name = tool_call.tool_name
+            console.print(f"\n[bold magenta]Tool Call: {tool_name}[/bold magenta]")
+            
+            # Print tool output (truncated if too long)
+            output = tool_call.output
+            if len(output) > 500:
+                output = output[:500] + "... [truncated]"
+            
+            console.print(Panel(output, title="[green]Output[/green]", border_style="green"))
+            
+            # Print reasoning after tool call if available (this logic is imperfect as we don't have mapping)
+            # But usually reasoning is interleaved.
+            
+        console.print("\n[dim]Generating final answer...[/dim]")
+
     while True:
         try:
             # Get user input
@@ -106,6 +139,7 @@ async def chat_loop(
                     problem=user_input,
                     dataset_name=dataset_name,
                     verbose=verbose,
+                    search_callback=print_search_trace,
                 )
             
             # Extract final response (post-processed by the workflow)
@@ -114,7 +148,15 @@ async def chat_loop(
             # Display response
             console.print("\n[bold blue]Assistant[/bold blue]")
             if HAS_RICH:
-                console.print(Panel(Markdown(final_response), border_style="blue"))
+                # Check for <think> tags in final response
+                if "<think>" in final_response:
+                    parts = final_response.split("</think>")
+                    think = parts[0].replace("<think>", "").strip()
+                    console.print(Panel(Markdown(think), title="[yellow]Final Reasoning[/yellow]", border_style="yellow"))
+                    if len(parts) > 1:
+                        console.print(Panel(Markdown(parts[1].strip()), border_style="blue"))
+                else:
+                    console.print(Panel(Markdown(final_response), border_style="blue"))
             else:
                 console.print(f"\n{final_response}\n")
             
