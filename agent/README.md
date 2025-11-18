@@ -60,3 +60,68 @@ Note you will need to get these API keys from the respective services.
     export OPENAI_API_KEY="XXXX"
     bash scripts/auto_search-oai.sh
     ```
+
+## Interactive Chat
+
+The interactive chat script runs the **exact same pipeline as `auto_search`** in an interactive format. It uses the `AutoReasonSearchWorkflow` with the same specialized agents, structured prompts, and two-stage process (SearchAgent → AnswerAgent).
+
+### Quick Start (Recommended)
+
+Use the self-contained launcher that automatically checks and launches required services:
+
+```bash
+# Basic usage (auto-launches MCP server if needed)
+python scripts/launch_chat.py
+
+# With a specific model
+python scripts/launch_chat.py --model hosted_vllm/rl-research/DR-Tulu-8B --base-url http://localhost:30001/v1
+
+# With dataset-specific instructions
+python scripts/launch_chat.py --dataset-name sqav2
+
+# Skip service checks (if services are already running)
+python scripts/launch_chat.py --skip-checks
+```
+
+### Manual Usage
+
+If you prefer to manage services manually:
+
+```bash
+# Use the auto_search workflow interactively
+python scripts/interactive_auto_search.py --config workflows/trained/auto_search_sft.yaml
+
+# With dataset-specific instructions (e.g., for SQA v2)
+python scripts/interactive_auto_search.py --config workflows/trained/auto_search_sft.yaml --dataset-name sqav2
+
+# With a specific model (override search_agent_model_name and base_url)
+python scripts/interactive_auto_search.py --config workflows/trained/auto_search_sft.yaml \
+    --config-overrides "search_agent_model_name=hosted_vllm/rl-research/DR-Tulu-8B,search_agent_base_url=http://localhost:30001/v1"
+
+# With config overrides (multiple parameters)
+python scripts/interactive_auto_search.py --config workflows/trained/auto_search_sft.yaml \
+    --config-overrides "search_tool_name=s2,use_browse_agent=false,search_agent_model_name=Qwen/Qwen3-8B"
+
+# Verbose mode to see tool calls and links
+python scripts/interactive_auto_search.py --config workflows/trained/auto_search_sft.yaml --verbose
+```
+
+**Model Configuration:**
+
+The workflow uses two models:
+- **`search_agent_model_name`**: Model for the SearchAgent (searches and reasons with tools)
+- **`browse_agent_model_name`**: Model for the BrowseAgent (if `use_browse_agent=true`)
+
+You can override these via `--config-overrides`:
+- `search_agent_model_name`: Model name (e.g., `"Qwen/Qwen3-8B"`, `"hosted_vllm/rl-research/DR-Tulu-8B"`)
+- `search_agent_base_url`: Base URL for self-hosted models (e.g., `"http://localhost:30001/v1"`)
+- `browse_agent_model_name`: Browse agent model name
+- `browse_agent_base_url`: Browse agent base URL
+
+**What it does:**
+- Uses the same `AutoReasonSearchWorkflow` as `auto_search`
+- Runs `SearchAgent` to search and reason with tools
+- Runs `AnswerAgent` to generate final answer from search results
+- Uses structured prompts from `UNIFIED_TOOL_CALLING_STRUCTURED_PROMPTS`
+- Applies dataset-specific instructions
+- Post-processes outputs (extracts `<answer>` tags, handles reasoning, etc.)
