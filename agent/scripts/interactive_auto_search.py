@@ -20,6 +20,7 @@ try:
     import typer
     from rich.console import Console
     from rich.markdown import Markdown
+    from rich.text import Text
     from rich.panel import Panel
     from rich.prompt import Prompt
     HAS_RICH = True
@@ -149,15 +150,45 @@ async def chat_loop(
             # Display response
             console.print("\n[bold blue]Assistant[/bold blue]")
             if HAS_RICH:
+                import re
+                
+                # Helper to format text with preserved and highlighted citation tags
+                def format_with_citations(text):
+                    """Format text preserving citation tags with Rich markup."""
+                    # Replace citation tags with Rich markup that will be visible
+                    def format_cite(match):
+                        # Group 1: quote char, Group 2: cite_id, Group 3: cite_content
+                        cite_id = match.group(2)
+                        cite_content = match.group(3)
+                        # Return Rich markup that preserves the tag structure
+                        return f'[dim]<cite id="[/dim][dim cyan]{cite_id}[/dim cyan][dim]">[/dim][cyan bold]{cite_content}[/cyan bold][dim]</cite>[/dim]'
+                    
+                    # Match both <cite id="..."> and <cite id=...> formats
+                    # Group 1: optional quote, Group 2: cite_id, Group 3: cite_content
+                    text = re.sub(
+                        r'<cite\s+id=(["\']?)([^"\'>\s]+)\1[^>]*>([^<]+)</cite>',
+                        format_cite,
+                        text
+                    )
+                    return text
+                
                 # Check for <think> tags in final response
                 if "<think>" in final_response:
                     parts = final_response.split("</think>")
                     think = parts[0].replace("<think>", "").strip()
                     console.print(Panel(Markdown(think), title="[yellow]Final Reasoning[/yellow]", border_style="yellow"))
                     if len(parts) > 1:
-                        console.print(Panel(Markdown(parts[1].strip()), border_style="blue"))
+                        answer_text = parts[1].strip()
+                        # Format citations and render
+                        answer_formatted = format_with_citations(answer_text)
+                        # Use Text.from_markup to render Rich markup, then Markdown for the rest
+                        # Actually, let's render markdown first, then apply citation formatting
+                        # For now, just print with markup - citations will be visible
+                        console.print(Panel(answer_formatted, border_style="blue"))
                 else:
-                    console.print(Panel(Markdown(final_response), border_style="blue"))
+                    # Format and render final response with preserved citations
+                    response_formatted = format_with_citations(final_response)
+                    console.print(Panel(response_formatted, border_style="blue"))
             else:
                 console.print(f"\n{final_response}\n")
             
@@ -245,6 +276,10 @@ def chat(
                     overrides[key] = float(value)
                 except ValueError:
                     overrides[key] = value
+    
+    # Set browse_timeout to 10s for interactive chat (unless explicitly overridden)
+    if "browse_timeout" not in overrides:
+        overrides["browse_timeout"] = 10
     
     # Create workflow
     try:
