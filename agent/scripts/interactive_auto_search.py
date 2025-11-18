@@ -18,11 +18,12 @@ from typing import Optional
 
 try:
     import typer
-    from rich.console import Console
+    from rich.console import Console, Group
     from rich.markdown import Markdown
     from rich.text import Text
     from rich.panel import Panel
     from rich.prompt import Prompt
+    from rich.live import Live
     HAS_RICH = True
 except ImportError:
     print("Warning: rich/typer not available. Install with: pip install typer rich")
@@ -81,78 +82,89 @@ async def chat_loop(
     if dataset_name:
         console.print(f"[dim]Using dataset configuration: {dataset_name}[/dim]\n")
 
+    # State for live display
+    current_text = ""
+    all_tool_outputs = []
+    live_display = None
+
     # Define callback to print step updates
     def print_step_update(text, tool_calls):
+        nonlocal current_text, live_display
         import re
         
+        if text:
+            current_text = text
+        if tool_calls:
+            all_tool_outputs.extend(tool_calls)
+            
+        if not live_display:
+            return
+
         # Helper to reduce newlines
         def clean_text(t):
             return re.sub(r'\n{3,}', '\n\n', t)
         
         # Helper to format citations with Rich markup (preserves them)
-        def format_citations(text):
-            """Format citation tags with Rich markup so they're visible."""
+        def format_citations(t):
             def format_cite(match):
                 cite_id = match.group(2)
                 cite_content = match.group(3)
                 return f'[dim]<cite id="[/dim][dim cyan]{cite_id}[/dim cyan][dim]">[/dim][cyan bold]{cite_content}[/cyan bold][dim]</cite>[/dim]'
             
-            # Match both <cite id="..."> and <cite id=...> formats
-            text = re.sub(
-                r'<cite\s+id=(["\']?)([^"\'>\s]+)\1[^>]*>([^<]+)</cite>',
-                format_cite,
-                text
-            )
-            return text
+            t = re.sub(r'<cite\s+id=(["\']?)([^"\'>\s]+)\1[^>]*>([^<]+)</cite>', format_cite, t)
+            return t
         
         # Helper to check if text only contains tool calls
-        def is_only_tool_call(text):
-            """Check if text only contains <call_tool> tags and no other content."""
-            # Remove whitespace and tool call tags
-            stripped = re.sub(r'<call_tool[^>]*>.*?</call_tool>', '', text, flags=re.DOTALL)
-            stripped = stripped.strip()
-            # If nothing remains except whitespace, it's only tool calls
-            return not stripped or stripped == ""
+        def is_only_tool_call(t):
+            t = t.strip()
+            # Robust check for streaming: starts with <call_tool
+            if t.startswith("<call_tool"):
+                # Check if there's any non-tool content after removing complete tool calls
+                stripped = re.sub(r'<call_tool[^>]*>.*?</call_tool>', '', t, flags=re.DOTALL).strip()
+                # If stripped is empty OR stripped is just an incomplete tag start, it's tool call only
+                if not stripped or stripped.startswith("<call_tool"):
+                    return True
+            return False
             
-        # Print text generation (thought/reasoning)
-        if text:
-            text = clean_text(text)
+        # Build renderables
+        renderables = []
+        
+        # Process text
+        if current_text:
+            text_content = clean_text(current_text)
             
-            # Determine panel title based on content
-            if is_only_tool_call(text):
+            if is_only_tool_call(text_content):
                 panel_title = "[yellow]Tool Call[/yellow]"
             else:
                 panel_title = "[yellow]Thinking[/yellow]"
             
-            if "<think>" in text:
-                parts = text.split("</think>")
+            if "<think>" in text_content:
+                parts = text_content.split("</think>")
                 think = parts[0].replace("<think>", "").strip()
-                # Format citations in thinking
                 think = format_citations(think)
-                console.print(Panel(think, title=panel_title, border_style="yellow"))
+                renderables.append(Panel(think, title=panel_title, border_style="yellow"))
+                
                 if len(parts) > 1 and parts[1].strip():
-                    # Show remaining text also in Thinking box
                     remaining = clean_text(parts[1].strip())
                     remaining = format_citations(remaining)
-                    console.print(Panel(remaining, title=panel_title, border_style="yellow"))
+                    renderables.append(Panel(remaining, title=panel_title, border_style="yellow"))
             else:
-                # Format citations and show all regular text
-                formatted_text = format_citations(text)
-                console.print(Panel(formatted_text, title=panel_title, border_style="yellow"))
+                formatted_text = format_citations(text_content)
+                renderables.append(Panel(formatted_text, title=panel_title, border_style="yellow"))
         
-        # Print tool calls
-        for tool_call in tool_calls:
+        # Process tool outputs
+        for tool_call in all_tool_outputs:
             tool_name = tool_call.tool_name
-            console.print(f"\n[bold magenta]Tool Call: {tool_name}[/bold magenta]")
+            renderables.append(Text(f"\nTool Call: {tool_name}", style="bold magenta"))
             
-            # Print tool output (truncated if too long)
             output = tool_call.output
             if len(output) > 500:
                 output = output[:500] + "... [truncated]"
             
-            # Clean output too
             output = clean_text(output)
-            console.print(Panel(output, title="[green]Output[/green]", border_style="green"))
+            renderables.append(Panel(output, title="[green]Output[/green]", border_style="green"))
+            
+        live_display.update(Group(*renderables))
 
     while True:
         try:
@@ -166,15 +178,25 @@ async def chat_loop(
             if not user_input.strip():
                 continue
             
-            # Show thinking indicator
-            status_msg = "[bold green]Running auto_search pipeline...[/bold green]"
-            if verbose:
-                status_msg += "\n[dim]This uses the same SearchAgent → AnswerAgent pipeline as auto_search[/dim]"
+            # Reset state
+            current_text = ""
+            all_tool_outputs = []
             
-            with console.status(status_msg, spinner="dots"):
-                console.print("\n[bold blue]Search & Reasoning Trace:[/bold blue]")
-                # Run the workflow - this is the EXACT same pipeline as auto_search
-                # The step_callback will print all output as it's generated, including the final answer
+            console.print("\n[bold blue]Search & Reasoning Trace:[/bold blue]")
+            
+            # Use Live display for streaming updates
+            if HAS_RICH:
+                with Live(Group(), console=console, refresh_per_second=4) as live:
+                    live_display = live
+                    result = await workflow(
+                        problem=user_input,
+                        dataset_name=dataset_name,
+                        verbose=verbose,
+                        step_callback=print_step_update,
+                    )
+                    live_display = None
+            else:
+                # Fallback for non-rich environments
                 result = await workflow(
                     problem=user_input,
                     dataset_name=dataset_name,
