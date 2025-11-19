@@ -11,7 +11,7 @@ authors = [
     {name = "Rulin Shao", email = "rulins@cs.washington.edu"}
 ]
 readme = "README.md"
-license = {text = "MIT"}
+license = {text = "Apache-2.0"}
 requires-python = ">=3.10"
 classifiers = [
     "Development Status :: 3 - Alpha",
