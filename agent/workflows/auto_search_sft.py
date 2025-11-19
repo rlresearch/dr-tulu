@@ -249,7 +249,7 @@ class AutoReasonSearchWorkflow(BaseWorkflow):
         # Separate generation client (SFT model)
         search_agent_base_url: Optional[str] = None
         search_agent_model_name: str = (
-            "rl-rag/qwen2.5-7b-combined-sft-training-data-v20250824"
+            "dr-tulu/DR-Tulu-8B"
         )
         search_agent_tokenizer_name: str = "Qwen/Qwen3-8B"
         search_agent_api_key: str = "dummy-key"
