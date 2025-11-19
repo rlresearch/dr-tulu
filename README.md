@@ -4,7 +4,7 @@
 # DR Tulu: Reinforcement Learning with Evolving Rubrics for Deep Research
 
 
-[**Paper**](https://allenai.org/papers/drtulu) • [**Data & Models**](https://huggingface.co/collections/rl-research/dr-tulu) • [**Blogpost**](http://allenai.org/blog/dr-tulu) • [**Video**](https://youtu.be/4i0W9qAf8K8)
+[**Paper**](https://allenai.org/papers/drtulu) • [**Data & Models**](https://huggingface.co/collections/rl-research/dr-tulu) • [**Blogpost**](http://allenai.org/blog/dr-tulu) • [**Video**](https://youtu.be/4i0W9qAf8K8)• [**Static Demo**]([https://youtu.be/4i0W9qAf8K8](https://dr-tulu.github.io/)) (live demo is coming soon!) 
 
 </div>
 
