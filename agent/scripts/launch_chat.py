@@ -303,6 +303,11 @@ Examples:
         help="Enable verbose output"
     )
     parser.add_argument(
+        "--show-full-tool-output",
+        action="store_true",
+        help="Show full tool output instead of truncating to 500 chars"
+    )
+    parser.add_argument(
         "--skip-checks",
         action="store_true",
         help="Skip checking/launching services"
@@ -463,6 +468,9 @@ Examples:
     if args.verbose:
         cmd.append("--verbose")
     
+    if args.show_full_tool_output:
+        cmd.append("--show-full-tool-output")
+
     # Build config overrides
     overrides = []
     if args.config_overrides:
