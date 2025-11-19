@@ -22,11 +22,12 @@ Set up API keys via `.env` file:
 ```bash
 S2_API_KEY=xxx
 SERPER_API_KEY=xxx
+JINA_API_KEY=xxx
 ```
 Note you will need to get these API keys from the respective services.
 - S2_API_KEY: https://api.semanticscholar.org/
 - SERPER_API_KEY: https://serper.dev/
-
+- JINA_API_KEY: https://jina.ai/reader/
 ## Getting started 
 
 1. Launch MCP Server 
@@ -40,7 +41,7 @@ Note you will need to get these API keys from the respective services.
     ```bash 
     CUDA_VISIBLE_DEVICES=0 vllm serve rl-research/DR-Tulu-8B --dtype auto --port 30002 --max-model-len 40960
     
-    CUDA_VISIBLE_DEVICES=1 vllm serve Qwen/Qwen3-8B --dtype auto --port 30002 --max-model-len 40960
+    CUDA_VISIBLE_DEVICES=1 vllm serve Qwen/Qwen3-8B --dtype auto --port 30003 --max-model-len 40960
     ```
 
 3. Run generation script 
