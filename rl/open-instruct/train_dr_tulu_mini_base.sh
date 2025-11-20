@@ -11,7 +11,7 @@ RUBRIC_JUDGE_MODEL=gpt-4.1-mini
 MCP_CACHE_DIR=.cache-${RANDOM}
 
 
-python open_instruct/grpo_fast.py \
+uv run python open_instruct/grpo_fast.py \
         --exp_name ${exp_name} \
         --wandb_project_name rl-rag \
         --beta 0.001 \
