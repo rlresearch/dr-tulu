@@ -10,7 +10,7 @@ Below we describe the basic setup steps and core training scripts.
 
 You can find the script we used to convert the RaR data to our format in `convert_rar_data.py`, and run it with:
 ```bash
-uv run python convert_rar_data.py --hf_org rl-rag
+uv run python convert_rar_data.py --hf_org <your hf username>
 ```
 
 ## Setup

@@ -44,7 +44,9 @@ def main():
     args = parser.parse_args()
     
     convert_rar_data("anisha2102/RaR-Medicine-20k-o3-mini", f"{args.hf_org}/RaR-Medicine-20k-o3-mini-converted")
+    print(f"Uploaded to {args.hf_org}/RaR-Medicine-20k-o3-mini-converted")
     convert_rar_data("anisha2102/RaR-Science-20k-o3-mini", f"{args.hf_org}/RaR-Science-20k-o3-mini-converted")
+    print(f"Uploaded to {args.hf_org}/RaR-Science-20k-o3-mini-converted")
 
 if __name__ == "__main__":
     main()
