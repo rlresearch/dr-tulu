@@ -8,6 +8,11 @@ We defer the reader to the [Open-Instruct](https://github.com/allenai/open-instr
 In particular, our branch is based on the following commit: [d075e4b](https://github.com/allenai/open-instruct/commit/d075e4bdcfc71b7713e789d2921016e0d84ee1fa).
 Below we describe the basic setup steps and core training scripts. 
 
+You can find the script we used to convert the RaR data to our format in `convert_rar_data.py`, and run it with:
+```bash
+uv run python convert_rar_data.py --hf_org rl-rag
+```
+
 ## Setup
 
 First, clone the repository:
