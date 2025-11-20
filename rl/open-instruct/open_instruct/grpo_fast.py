@@ -558,6 +558,21 @@ class MetricsTracker:
         self.metrics[self.names2idx[name]] = value
         return self
 
+    # [New Feature] Convergence Stability: Fixed-size circular buffer on correct device
+    def add_convergence_tracking(self, current_loss: torch.Tensor, window_size: int = 5):
+        """Track loss convergence with fixed-size circular buffer on correct device"""
+        if not hasattr(self, '_loss_window'):
+            device = self.metrics.device
+            self._loss_window = torch.zeros(window_size, device=device)
+            self._window_idx = 0
+        self._loss_window[self._window_idx % window_size] = current_loss.detach()
+        self._window_idx += 1
+        if self._window_idx >= window_size:
+            window_std = torch.std(self._loss_window)
+            convergence_stability = 1.0 / (1.0 + window_std)
+            self.add("convergence_stability", convergence_stability)
+        return self
+
     def get_metrics_list(self) -> dict[str, float]:
         metrics_list = self.metrics.tolist()
         return {name: metrics_list[idx] for name, idx in self.names2idx.items()}
@@ -1021,6 +1036,8 @@ class PolicyTrainerRayProcess(RayProcess):
                 self.local_metrics.add("loss/policy_avg", pg_loss_stats.mean())
                 self.local_metrics.add("loss/kl_avg", kl_loss_stats.mean())
                 self.local_metrics.add("loss/total_avg", loss_stats.mean())
+                # Add convergence tracking
+                self.local_metrics.add_convergence_tracking(loss_stats.mean())
                 self.local_metrics.add("policy/clipfrac_avg", pg_clipfrac_stats.mean())
                 self.local_metrics.add("val/ratio", ratio_stats.mean())
                 self.local_metrics.add("val/ratio_var", ratio_stats.var())
