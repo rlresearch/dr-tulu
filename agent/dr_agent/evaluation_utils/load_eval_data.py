@@ -7,7 +7,7 @@ from datasets import load_dataset
 from .data_types import DatasetConfig
 
 SUPPORTED_TASKS = {
-    "genetic_qa": "parkmoll/genetic-variants-qa",
+    "genetic_diseases_qa": "parkmoll/genetic-variants-qa",
     "deep_scholar_bench": "xinranz3/deepscholar_bench_fixed",
     "sqav2": "allenai/asta-bench",
 }
@@ -58,8 +58,8 @@ def load_eval_dataset(config: DatasetConfig) -> List[Dict]:
         return load_deep_scholar_bench_data(num_examples)
     elif config["name"] == "sqav2":
         return load_sqav2_data(num_examples, shuffle)
-    elif config["name"] == "genetic_qa":
-        return load_genetic_qa_data(num_examples, shuffle)
+    elif config["name"] == "genetic_diseases_qa":
+        return load_genetic_diseases_qa_data(num_examples, shuffle)
     else:
         raise ValueError(
             f"Unsupported dataset: {config['name']}. Supported datasets: {list(SUPPORTED_TASKS.keys())}"
@@ -116,11 +116,11 @@ def load_sqav2_data(
     return examples
 
 
-def load_genetic_qa_data(
+def load_genetic_diseases_qa_data(
     num_examples: Optional[int] = None, shuffle: bool = False
 ) -> List[Dict]:
     """Load Genetic Variants QA dataset data."""
-    dataset_repo = SUPPORTED_TASKS["genetic_qa"]
+    dataset_repo = SUPPORTED_TASKS["genetic_diseases_qa"]
 
     question_types_data = load_dataset(
         dataset_repo, data_files="question_types.json", split="train"

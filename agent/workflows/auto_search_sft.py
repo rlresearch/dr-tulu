@@ -91,7 +91,7 @@ class SearchAgent(BaseAgent):
             instruction_field_name = "long_form"
         elif dataset_name in ["healthbench", "deep_research_bench", "researchqa"]:
             instruction_field_name = "short_form"
-        elif "sft-mix" in dataset_name:
+        elif dataset_name and "sft-mix" in dataset_name:
             if "short_form" in dataset_name:
                 instruction_field_name = "exact_answer"
             elif "long_form" in dataset_name:
@@ -106,8 +106,8 @@ class SearchAgent(BaseAgent):
             elif "long_form" in str(dataset_name):
                 instruction_field_name = "long_form"
             else:
-                print("set additional instructions none")
-                instruction_field_name = None
+                # Default to long_form when dataset_name is None
+                instruction_field_name = "long_form"
 
         return [
             {
@@ -165,7 +165,11 @@ class AnswerAgent(BaseAgent):
         elif dataset_name in ["healthbench", "deep_research_bench", "researchqa"]:
             instruction_field_name = "short_form"
         else:
-            raise ValueError(f"Invalid dataset name: {dataset_name}")
+            # Default to long_form when dataset name is unknown/None
+            if dataset_name is None:
+                instruction_field_name = "long_form"  # Default behavior
+            else:
+                raise ValueError(f"Invalid dataset name: {dataset_name}")
 
         return [
             {
@@ -249,7 +253,7 @@ class AutoReasonSearchWorkflow(BaseWorkflow):
         # Separate generation client (SFT model)
         search_agent_base_url: Optional[str] = None
         search_agent_model_name: str = (
-            "rl-rag/qwen2.5-7b-combined-sft-training-data-v20250824"
+            "dr-tulu/DR-Tulu-8B"
         )
         search_agent_tokenizer_name: str = "Qwen/Qwen3-8B"
         search_agent_api_key: str = "dummy-key"
@@ -431,6 +435,8 @@ class AutoReasonSearchWorkflow(BaseWorkflow):
         problem: str,
         dataset_name: Optional[str] = None,
         verbose: bool = True,
+        search_callback: Optional[Any] = None,
+        step_callback: Optional[Any] = None,
     ) -> Dict[str, Any]:
         cfg = self.configuration
         assert cfg is not None
@@ -458,7 +464,14 @@ class AutoReasonSearchWorkflow(BaseWorkflow):
             temperature=cfg.search_agent_temperature,
             max_tool_calls=cfg.search_agent_max_tool_calls,
             verbose=verbose,
+            on_step_callback=step_callback,
         )
+
+        if search_callback:
+            if asyncio.iscoroutinefunction(search_callback):
+                await search_callback(results)
+            else:
+                search_callback(results)
 
         browsed_links = []
         searched_links = []
@@ -519,6 +532,7 @@ class AutoReasonSearchWorkflow(BaseWorkflow):
             max_tokens=cfg.search_agent_max_tokens,
             temperature=cfg.search_agent_temperature,
             verbose=verbose,
+            on_step_callback=step_callback,
         )
 
         if verbose:

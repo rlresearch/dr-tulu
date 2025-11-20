@@ -182,6 +182,7 @@ class BaseAgent:
         - Variables for prompt formatting (will be extracted as needed)
         - Generation parameters (temperature, max_tokens, etc.)
         - Tool parameters (max_tool_calls, verbose, etc.)
+        - Callbacks (on_step_callback)
         """
         # Separate generation parameters from prompt variables
         generation_params = {
@@ -197,11 +198,12 @@ class BaseAgent:
             "generation_prefix",
             "stop",
             "tool_calling_mode",  # Support for native vs parser tool calling
+            "on_step_callback", # Added callback
         }
 
         # Extract generation parameters
         gen_kwargs = {k: v for k, v in kwargs.items() if k in generation_params}
-
+        
         # Prepare the prompt with remaining kwargs (prompt variables)
         formatted_prompt = self._prepare_prompt(**kwargs)
 
