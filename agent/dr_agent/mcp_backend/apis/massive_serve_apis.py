@@ -194,7 +194,7 @@ def parse_massive_serve_results(
         raise ValueError(f"Error parsing massive-serve response structure: {str(e)}")
 
 
-# @cached()
+@cached()
 def search_massive_serve_cached(
     query: str,
     n_docs: int = 10,

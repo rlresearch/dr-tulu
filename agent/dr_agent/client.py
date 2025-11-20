@@ -339,7 +339,6 @@ class LLMToolClient:
         repetition_penalty: Optional[float] = None,
         seed: Optional[int] = None,
         stop: Optional[List[str]] = None,
-        on_step_callback: Optional[Callable[[str, List[ToolOutput]], None]] = None,
         **kwargs,
     ) -> GenerateWithToolsOutput:
         """Generate response with automatic tool calling
@@ -361,7 +360,6 @@ class LLMToolClient:
             repetition_penalty: Repetition penalty (default: from config, vLLM only)
             seed: Random seed for reproducible generation (default: from config)
             stop: Additional stop sequences (default: tool end tags)
-            on_step_callback: Optional callback called after each generation step with (generated_text, tool_calls)
             **kwargs: Additional arguments passed to the underlying API
 
         Returns:
@@ -400,7 +398,6 @@ class LLMToolClient:
                         repetition_penalty,
                         seed,
                         stop,
-                        on_step_callback=on_step_callback,
                         **kwargs,
                     )
                 else:
@@ -417,7 +414,6 @@ class LLMToolClient:
                         repetition_penalty,
                         seed,
                         stop,
-                        on_step_callback=on_step_callback,
                         **kwargs,
                     )
             else:
@@ -440,7 +436,6 @@ class LLMToolClient:
         repetition_penalty: Optional[float],
         seed: Optional[int],
         stop: Optional[List[str]],
-        on_step_callback: Optional[Callable[[str, List[ToolOutput]], None]] = None,
         **kwargs,
     ) -> GenerateWithToolsOutput:
         """Generate response for commercial API models using chat completion API"""
@@ -513,13 +508,6 @@ class LLMToolClient:
                 **kwargs,
             )
 
-            # Call on_step_callback with the new generation
-            if on_step_callback:
-                if asyncio.iscoroutinefunction(on_step_callback):
-                    await on_step_callback(response_content, [])
-                else:
-                    on_step_callback(response_content, [])
-
             # Add assistant response to messages
             current_messages.append({"role": "assistant", "content": response_content})
 
@@ -585,13 +573,6 @@ class LLMToolClient:
             # Record the tool call
             tool_calls.append(tool_output)
 
-            # Call on_step_callback with the tool output
-            if on_step_callback:
-                if asyncio.iscoroutinefunction(on_step_callback):
-                    await on_step_callback("", [tool_output])
-                else:
-                    on_step_callback("", [tool_output])
-
             if include_tool_results and tool_output.called:
                 # Append tool result to context as user message
                 result_formatted = tool.format_result(tool_output)
@@ -639,7 +620,6 @@ class LLMToolClient:
         repetition_penalty: Optional[float],
         seed: Optional[int],
         stop: Optional[List[str]],
-        on_step_callback: Optional[Callable[[str, List[ToolOutput]], None]] = None,
         **kwargs,
     ) -> GenerateWithToolsOutput:
         """Generate response for self-hosted models (vLLM) using text completion API"""
@@ -698,13 +678,6 @@ class LLMToolClient:
 
             # Append response to context
             current_context += response
-
-            # Call on_step_callback with the new generation
-            if on_step_callback:
-                if asyncio.iscoroutinefunction(on_step_callback):
-                    await on_step_callback(response, [])
-                else:
-                    on_step_callback(response, [])
 
             # Check if we've hit the token limit after generation
             new_token_count = self._count_tokens(current_context)
@@ -765,13 +738,6 @@ class LLMToolClient:
 
                 # Record the tool call - just save the ToolOutput directly
                 tool_calls.append(tool_output)
-
-                # Call on_step_callback with the tool output
-                if on_step_callback:
-                    if asyncio.iscoroutinefunction(on_step_callback):
-                        await on_step_callback("", [tool_output])
-                    else:
-                        on_step_callback("", [tool_output])
 
                 if include_tool_results and tool_output.called:
                     # Append tool result to context
