@@ -7,7 +7,9 @@ dataset_list="rl-research/dr-tulu-rl-data 1.0"
 # you need all these apis by default.
 WANDB_API_KEY=xxx
 OPENAI_API_KEY=xxx
-# if using the docker container, you can use this path. Otherwise, you need to set the path to the blocklist file.
+# if using the docker container and crawl4ai, you can use this path.
+# Otherwise, you need to set the path to the blocklist file.
+# not used for jina.
 CRAWL4AI_BLOCKLIST_PATH=/stage/rl-rag-mcp/utils/crawl4ai_block_list.txt
 MCP_MAX_CONCURRENT_CALLS=512
 VLLM_ALLOW_LONG_MAX_MODEL_LEN=1

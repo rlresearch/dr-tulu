@@ -21,6 +21,16 @@ We use uv to manage the dependencies:
 uv sync
 ```
 
+Then, setup environment variables used by dr-agent-lib:
+```bash
+touch .env
+echo "S2_API_KEY=xxx" >> .env
+echo "SERPER_API_KEY=xxx" >> .env
+echo "JINA_API_KEY=xxx >> .env
+```
+
+Note that for original training, we used crawl4ai, which doesn't need the JINA_API_KEY, but may crawl directly from your IP (we used a proxy server during training, which we may share in future).
+
 And you should be done! Optionally, you can use our provided Dockerfile to build a Docker image:
 ```bash
 docker build -t dr-tulu-rl .
@@ -29,6 +39,7 @@ docker build -t dr-tulu-rl .
 ## Training
 
 The core training script is `open_instruct/grpo_fast.py`, and you can use the `train_dr_tulu.sh` script to train the model.
+**This script will not work out of the box, please read the following instructions and the script itself for more details.**
 Note it requires 2 nodes with 8 GPUs each. Open-Instruct uses ray to manage the distributed training. To setup the ray cluster, follow steps like in the `configs/beaker_configs/ray_node_setup.sh` script:
 
 First, setup a head node:
@@ -43,6 +54,13 @@ ray start --address="{HEAD_IP}:8888" --block --dashboard-host=0.0.0.0
 
 Note that the head node and worker node should be on different machines, but reachable from each other. Finally, can then run run the training job (after setting the environment variables as in `train_dr_tulu.sh`):
 ```bash
+export OPENAI_API_KEY=xxx
+export WANDB_API_KEY=xxx
+
 python open_instruct/grpo_fast.py \
     ...
 ```
+
+### Test training
+
+You can also test you have setup training correctly by running the `train_dr_tulu_mini_base.sh` script, which only requires 1 GPU, and trains Qwen/Qwen3-0.6B.
