@@ -44,8 +44,11 @@ uv run python open_instruct/grpo_fast.py \
         --sft_messages_key messages \
         --total_episodes 10000000 \
         --deepspeed_stage 3 \
-        --num_learners_per_node 8 \
-        --vllm_num_engines 8 \
+        --num_learners_per_node 1 \
+        --vllm_num_engines 1 \
+        --single_gpu_mode True \
+        --vllm_gpu_memory_utilization 0.3 \
+        --vllm_sync_backend gloo \
         --vllm_tensor_parallel_size 1 \
         --lr_scheduler_type constant \
         --apply_verifiable_reward true \
@@ -54,7 +57,6 @@ uv run python open_instruct/grpo_fast.py \
         --save_freq 50 \
         --try_launch_beaker_eval_jobs_on_weka False \
         --gradient_checkpointing \
-        --with_tracking \
         --max_tool_calls 10 \
         --only_reward_good_outputs False \
         --tools mcp \
