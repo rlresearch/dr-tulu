@@ -69,3 +69,19 @@ python open_instruct/grpo_fast.py \
 ### Test training
 
 You can also test you have setup training correctly by running the `train_dr_tulu_mini_base.sh` script, which only requires 1 GPU, and trains Qwen/Qwen3-0.6B.
+
+I don't know if this trains a good model, but at least it should let you test your training setup works before touching distributed training!
+
+### MCP Tool debugging
+
+Sometimes the MCP tool can have some issues, so you should check the MCP server logs to debug and check its running correctly. For example, sometimes the port doesn't bind.
+
+If you see the training code logging successful tool calls, it should be fine!
+Like this:
+```bash
+(ToolActor pid=500031) Using MCP tool:  google_search
+(ToolActor pid=500031) Using MCP tool:  snippet_search
+(ToolActor pid=500031) MCP snippet_search Tool Error: No results found for the query.
+(ToolActor pid=500031) Returning error output anyway.
+(ToolActor pid=500031) Using MCP tool:  google_search
+```
