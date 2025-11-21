@@ -286,10 +286,15 @@ async def chat_loop(
                 snippet_sections = []
                 if isinstance(tool_call, DocumentToolOutput) and tool_call.documents:
                     snippet_blocks = []
-                    for idx, doc in enumerate(tool_call.documents, start=1):
+                    for idx, doc in enumerate(tool_call.documents):
+                        snippet_id = (
+                            f"{tool_call.call_id}-{idx}"
+                            if getattr(tool_call, "call_id", None)
+                            else doc.id
+                        )
                         snippet_content = clean_text(doc.stringify())
                         snippet_blocks.append(
-                            f"[bold]{idx}. Snippet[/bold] [dim](id={doc.id})[/dim]\n{snippet_content}"
+                            f"[bold]{idx + 1}. Snippet[/bold] [dim](id={snippet_id})[/dim]\n{snippet_content}"
                         )
                     if snippet_blocks:
                         snippet_sections.append("\n\n".join(snippet_blocks))
