@@ -5,21 +5,24 @@ dataset_list="rl-research/dr-tulu-rl-data 1.0"
 
 # set env vars
 # you need all these apis by default.
-WANDB_API_KEY=xxx
-OPENAI_API_KEY=xxx
-# if using the docker container, you can use this path. Otherwise, you need to set the path to the blocklist file.
-CRAWL4AI_BLOCKLIST_PATH=/stage/rl-rag-mcp/utils/crawl4ai_block_list.txt
-MCP_MAX_CONCURRENT_CALLS=512
-VLLM_ALLOW_LONG_MAX_MODEL_LEN=1
-RUBRIC_JUDGE_MODEL=gpt-4.1-mini
-MCP_CACHE_DIR=.cache-${RANDOM}
+export WANDB_API_KEY=xxx
+export OPENAI_API_KEY=xxx
+# if using the docker container and crawl4ai, you can use this path.
+# Otherwise, you need to set the path to the blocklist file.
+# not used for jina.
+export CRAWL4AI_BLOCKLIST_PATH=/stage/rl-rag-mcp/utils/crawl4ai_block_list.txt
+export MCP_MAX_CONCURRENT_CALLS=512
+export VLLM_ALLOW_LONG_MAX_MODEL_LEN=1
+export RUBRIC_JUDGE_MODEL=gpt-4.1-mini
+export MCP_CACHE_DIR=.cache-${RANDOM}
+export MCP_TRANSPORT_PORT=8003
 
 # setup a ray cluster, with 2 nodes and 8 GPUs per node.
 # in ai2, we use the following script:
 source configs/beaker_configs/ray_node_setup.sh
 
 
-python open_instruct/grpo_fast.py \
+uv run --extra compile python open_instruct/grpo_fast.py \
         --exp_name ${exp_name} \
         --wandb_project_name rl-rag \
         --beta 0.001 \
@@ -67,10 +70,11 @@ python open_instruct/grpo_fast.py \
         --only_reward_good_outputs False \
         --tools mcp \
         --checkpoint_state_freq 50 \
+        --checkpoint_state_dir output/checkpoints \
         --mcp_parser_name v20250824 \
         --system_prompt_file open_instruct/search_utils/system_prompts/unified_tool_calling_v20250907.yaml  \
         --mcp_tool_names 'snippet_search,google_search,browse_webpage' \
-        --mcp_server_command "'python -m dr_agent.mcp_backend.main --transport http --port 8000 --host 0.0.0.0 --path /mcp'"
+        --mcp_server_command "'python -m dr_agent.mcp_backend.main --transport http --port 8003 --host 0.0.0.0 --path /mcp'"
 
 # For people at Ai2, here is the exact command we used:
 #############
