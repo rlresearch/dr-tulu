@@ -165,11 +165,7 @@ class AnswerAgent(BaseAgent):
         elif dataset_name in ["healthbench", "deep_research_bench", "researchqa"]:
             instruction_field_name = "short_form"
         else:
-            # Default to long_form when dataset name is unknown/None
-            if dataset_name is None:
-                instruction_field_name = "long_form"  # Default behavior
-            else:
-                raise ValueError(f"Invalid dataset name: {dataset_name}")
+            raise ValueError(f"Invalid dataset name: {dataset_name}")
 
         return [
             {
