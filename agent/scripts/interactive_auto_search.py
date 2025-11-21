@@ -289,11 +289,10 @@ async def chat_loop(
                     and len(output) > 500
                 ):
                     output = output[:500] + "... [truncated]"
-                
                 output = clean_text(output)
-                console.print(Panel(output, title="[green]Output[/green]", border_style="green"))
 
-                # If we have structured documents, list each snippet with its ID
+                # Append snippet info (if any) underneath the tool output
+                extra_sections = []
                 if isinstance(tool_call, DocumentToolOutput) and tool_call.documents:
                     snippet_blocks = []
                     for idx, doc in enumerate(tool_call.documents, start=1):
@@ -302,13 +301,22 @@ async def chat_loop(
                             f"[bold]{idx}. Snippet[/bold] [dim](id={doc.id})[/dim]\n{snippet_content}"
                         )
                     if snippet_blocks:
-                        console.print(
-                            Panel(
-                                "\n\n".join(snippet_blocks),
-                                title="[cyan]Retrieved Documents[/cyan]",
-                                border_style="cyan",
-                            )
-                        )
+                        extra_sections.append("\n\n".join(snippet_blocks))
+
+                combined_output = output
+                if extra_sections:
+                    combined_output = (
+                        f"{output}\n\n[cyan]Retrieved Documents[/cyan]\n"
+                        + "\n\n".join(extra_sections)
+                    )
+
+                console.print(
+                    Panel(
+                        combined_output,
+                        title="[green]Output[/green]",
+                        border_style="green",
+                    )
+                )
                 
             # Reset segment for next block (next iteration)
             current_segment_text = ""
