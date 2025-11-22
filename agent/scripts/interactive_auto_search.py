@@ -106,6 +106,7 @@ async def chat_loop(
     active_live = None
     is_answering = False
     final_answer_text = ""  # Store final answer for bibliography extraction
+    thinking_text = ""  # Store final thinking text for display
     
     # Track snippets for bibliography (snippet_id -> snippet_info dict)
     snippets_dict = {}
@@ -378,6 +379,7 @@ async def chat_loop(
             current_segment_text = ""
             active_live = None
             final_answer_text = ""
+            thinking_text = ""
             snippets_dict.clear()  # Reset snippets for each query
             
             console.print("\n[bold blue]Search & Reasoning Trace:[/bold blue]")
@@ -400,25 +402,23 @@ async def chat_loop(
                 step_callback=print_step_update,
             )
             
-            # Finalize any remaining live display
+            # Store final text before processing (answer or thinking)
             if active_live:
                 if is_answering:
-                    # active_live.update(render_panel(current_segment_text, "Answer", "green", is_active=False))
                     final_answer_text = current_segment_text  # Store final answer for bibliography
                 else:
-                    active_live.update(render_panel(current_segment_text, "Thinking", "yellow", is_active=False))
-                active_live.stop()
-                active_live = None
+                    thinking_text = current_segment_text  # Store thinking text for display
             
-            # Don't print final_response again - it's already been printed via step_callback
+            # Variables for bibliography
+            cited_snippet_ids = []
+            id_mapping = {}
             
-            # Extract citation IDs from final answer and display bibliography
+            # Extract citation IDs from final answer and rewrite them
             if final_answer_text:
                 # Extract all citation IDs from the answer
                 # Pattern matches: <cite id="ID"> or <cite id='ID'> or <cite id=ID> or <cite ids="ID1,ID2">
                 citation_pattern = r'<cite\s+ids?=(["\']?)([^"\'>\s]+)\1[^>]*>'
                 citation_matches = re.findall(citation_pattern, final_answer_text)
-                cited_snippet_ids = []
                 # Add IDs in order of appearance in the text
                 for quote_char, cite_id in citation_matches:
                     # Handle comma-separated IDs (e.g., <cite id="ID1,ID2">)
@@ -430,7 +430,7 @@ async def chat_loop(
                 # Create mapping from original IDs to letter-based IDs
                 # Map by prefix (part before dash) to preserve suffix
                 prefix_to_letter = {}
-                id_mapping = {}  # original_id -> letter_based_id
+                id_mapping = {}  # original_id -> letter_based_id (already initialized above)
                 
                 for idx, original_id in enumerate(cited_snippet_ids):
                     # Split ID into prefix and suffix (e.g., "36a93066-7" -> prefix="36a93066", suffix="7")
@@ -471,46 +471,68 @@ async def chat_loop(
                     final_answer_text
                 )
                 
-                # Display the final answer with rewritten IDs
-                active_live.update(render_panel(format_citations(final_answer_text), "Answer", "green", is_active=False))                
-                
-                # Display bibliography if there are cited snippets
-                if cited_snippet_ids and snippets_dict:
-                    bibliography_items = []
-                    for idx, original_id in enumerate(cited_snippet_ids, 1):
-                        if original_id in snippets_dict:
-                            snippet_info = snippets_dict[original_id]
-                            snippet_content = snippet_info["content"]
-                            tool_name = snippet_info["tool_name"]
-                            # Use letter-based ID for display
-                            display_id = id_mapping[original_id]
-                            # Truncate snippet_content after the URL line
-                            lines = snippet_content.split('\n')
-                            truncated_lines = []
-                            url_line_found = False
-                            for line in lines:
-                                truncated_lines.append(line)
-                                # Check if this line contains "URL:" (case-insensitive)
-                                if line.strip().upper().startswith('URL:'):
-                                    url_line_found = True
-                                    break
-                            # If URL line was found, use truncated version; otherwise use original
-                            if url_line_found:
-                                snippet_content = '\n'.join(truncated_lines)
-                            bibliography_items.append(
-                                f"[bold]{idx}. \\[{display_id}\\][/bold]({tool_name})\nOriginal ID: {original_id}\n{snippet_content}"
-                            )
-                    
-                    if bibliography_items:
-                        bibliography_text = "\n\n".join(bibliography_items)
-                        console.print(
-                            Panel(
-                                bibliography_text,
-                                title="[cyan]Bibliography[/cyan]",
-                                border_style="cyan",
-                            )
+                # Update the live display with the formatted answer (with rewritten IDs) if we're still answering
+                if active_live and is_answering:
+                    active_live.update(render_panel(format_citations(final_answer_text), "Answer", "green", is_active=False))
+                    active_live.stop()
+                    active_live = None
+            
+            # Finalize any remaining live display (if not already done)
+            # Note: If we had final_answer_text with citations, we already updated and stopped active_live above
+            if active_live:
+                if is_answering:
+                    # If we didn't process final_answer_text above (no citations or no final_answer_text), update it now
+                    if not final_answer_text:
+                        final_answer_text = current_segment_text
+                    if final_answer_text:
+                        active_live.update(render_panel(format_citations(final_answer_text), "Answer", "green", is_active=False))
+                else:
+                    # Display the thinking text we stored earlier
+                    if thinking_text:
+                        active_live.update(render_panel(thinking_text, "Thinking", "yellow", is_active=False))
+                    else:
+                        # Fallback to current_segment_text if thinking_text wasn't stored
+                        active_live.update(render_panel(current_segment_text, "Thinking", "yellow", is_active=False))
+                active_live.stop()
+                active_live = None
+            
+            # Display bibliography after the final answer (if we have citations)
+            if final_answer_text and cited_snippet_ids and snippets_dict:
+                bibliography_items = []
+                for idx, original_id in enumerate(cited_snippet_ids, 1):
+                    if original_id in snippets_dict:
+                        snippet_info = snippets_dict[original_id]
+                        snippet_content = snippet_info["content"]
+                        tool_name = snippet_info["tool_name"]
+                        # Use letter-based ID for display
+                        display_id = id_mapping.get(original_id, original_id)
+                        # Truncate snippet_content after the URL line
+                        lines = snippet_content.split('\n')
+                        truncated_lines = []
+                        url_line_found = False
+                        for line in lines:
+                            truncated_lines.append(line)
+                            # Check if this line contains "URL:" (case-insensitive)
+                            if line.strip().upper().startswith('URL:'):
+                                url_line_found = True
+                                break
+                        # If URL line was found, use truncated version; otherwise use original
+                        if url_line_found:
+                            snippet_content = '\n'.join(truncated_lines)
+                        bibliography_items.append(
+                            f"[bold]{idx}. \\[{display_id}\\][/bold]({tool_name})\nOriginal ID: {original_id}\n{snippet_content}"
                         )
-                        console.print()  # Empty line for spacing
+                
+                if bibliography_items:
+                    bibliography_text = "\n\n".join(bibliography_items)
+                    console.print(
+                        Panel(
+                            bibliography_text,
+                            title="[cyan]Bibliography[/cyan]",
+                            border_style="cyan",
+                        )
+                    )
+                    console.print()  # Empty line for spacing
             
             # Show detailed tool usage info
             browsed_links = result.get("browsed_links", [])
