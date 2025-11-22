@@ -474,6 +474,30 @@ def truncate_response(stop_token_id: int, pad_token_id: int, responses: torch.Te
     return postprocessed_responses
 
 
+def normalize_response_text(response: str) -> str:
+    """Normalize response text for better evaluation"""
+    import re
+    
+    # Type safety guard - prevents crashes on None or non-string inputs
+    if not isinstance(response, str):
+        return ""
+    
+    # Fix: Use [ \t]+ instead of \s+ to preserve newlines
+    normalized = re.sub(r'[ \t]+', ' ', response)
+    normalized = normalized.replace(' .', '.').replace(' ,', ',')
+    normalized = normalized.replace(' ?', '?').replace(' !', '!')
+    
+    # Clean up: Remove all whitespace from blank lines
+    # This handles lines that have only spaces/tabs between newlines
+    normalized = re.sub(r'\n[ \t]+(?=\n)', '\n', normalized)  # whitespace between newlines
+    normalized = re.sub(r'\n[ \t]+$', '\n', normalized, flags=re.MULTILINE)  # trailing whitespace on lines
+    
+    # Collapse 3+ newlines to 2
+    normalized = re.sub(r'\n{3,}', '\n\n', normalized)
+    normalized = normalized.strip()
+    return normalized
+
+
 def generate(
     lm_backbone: torch.nn.Module, queries: torch.Tensor, pad_token_id: int, generation_config: dict
 ) -> Tuple[torch.Tensor, torch.Tensor]:
