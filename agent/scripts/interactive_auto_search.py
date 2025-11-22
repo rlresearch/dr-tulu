@@ -110,6 +110,17 @@ async def chat_loop(
     # Track snippets for bibliography (snippet_id -> snippet_info dict)
     snippets_dict = {}
 
+    # Helper to convert number to letter sequence (0->A, 1->B, ..., 25->Z, 26->AA, ...)
+    def number_to_letters(n):
+        """Convert a number to letter sequence: 0->A, 1->B, ..., 25->Z, 26->AA, 27->AB, ..."""
+        result = ""
+        while n >= 0:
+            result = chr(65 + (n % 26)) + result  # 65 is 'A'
+            n = n // 26 - 1
+            if n < 0:
+                break
+        return result
+    
     # Helper to reduce newlines
     def clean_text(t):
         return re.sub(r'\n{3,}', '\n\n', t)
@@ -412,19 +423,80 @@ async def chat_loop(
                         if id not in cited_snippet_ids:
                             cited_snippet_ids += [id]
                 
+                # Create mapping from original IDs to letter-based IDs
+                # Map by prefix (part before dash) to preserve suffix
+                prefix_to_letter = {}
+                id_mapping = {}  # original_id -> letter_based_id
+                
+                for idx, original_id in enumerate(cited_snippet_ids):
+                    # Split ID into prefix and suffix (e.g., "36a93066-7" -> prefix="36a93066", suffix="7")
+                    if '-' in original_id:
+                        prefix, suffix = original_id.rsplit('-', 1)
+                    else:
+                        # If no dash, treat entire ID as prefix with empty suffix
+                        prefix, suffix = original_id, ""
+                    
+                    # Get or create letter for this prefix                    
+                    prefix_to_letter[prefix] = number_to_letters(idx)
+                    
+                    letter = prefix_to_letter[prefix]
+                    # Reconstruct with letter prefix and original suffix
+                    if suffix:
+                        new_id = f"{letter}-{suffix}"
+                    else:
+                        new_id = letter
+                    
+                    id_mapping[original_id] = new_id
+                
+                # Replace IDs in final_answer_text
+                def replace_cite_id(match):
+                    quote_char = match.group(1)
+                    original_ids_str = match.group(2)
+                    # Handle comma-separated IDs
+                    original_ids = [id.strip() for id in original_ids_str.split(',')]
+                    new_ids = [id_mapping.get(id, id) for id in original_ids]
+                    new_ids_str = ','.join(new_ids)
+                    # Use 'ids' if multiple IDs, 'id' if single
+                    attr_name = 'ids' if len(new_ids) > 1 else 'id'
+                    return f'<cite {attr_name}={quote_char}{new_ids_str}{quote_char}>'
+                
+                # Replace all citation IDs in the text
+                final_answer_text = re.sub(
+                    r'<cite\s+ids?=(["\']?)([^"\'>\s]+)\1[^>]*>',
+                    replace_cite_id,
+                    final_answer_text
+                )
+                
+                # Re-display the final answer with rewritten IDs
+                if id_mapping:
+                    console.print("\n[bold blue]Final Answer:[/bold blue]")
+                    formatted_answer = format_citations(final_answer_text)
+                    answer_renderable = Text.from_markup(formatted_answer)
+                    console.print(
+                        Panel(
+                            answer_renderable,
+                            title="[green]Answer[/green]",
+                            title_align="left",
+                            border_style="green"
+                        )
+                    )
+                    console.print()  # Empty line for spacing
+                
                 # Display bibliography if there are cited snippets
                 if cited_snippet_ids and snippets_dict:
                     bibliography_items = []
-                    for idx, snippet_id in enumerate(cited_snippet_ids, 1):
-                        if snippet_id in snippets_dict:
-                            snippet_info = snippets_dict[snippet_id]
+                    for idx, original_id in enumerate(cited_snippet_ids, 1):
+                        if original_id in snippets_dict:
+                            snippet_info = snippets_dict[original_id]
                             snippet_content = snippet_info["content"]
                             tool_name = snippet_info["tool_name"]
+                            # Use letter-based ID for display
+                            display_id = id_mapping.get(original_id, original_id)
                             # Truncate long snippets for display
                             if len(snippet_content) > 300:
                                 snippet_content = snippet_content[:300] + "..."
                             bibliography_items.append(
-                                f"[bold]{idx}. \\[{snippet_id}\\][/bold]({tool_name})\n{snippet_content}"
+                                f"[bold]{idx}. \\[{display_id}\\][/bold]({tool_name})\n{snippet_content}"
                             )
                     
                     if bibliography_items:
