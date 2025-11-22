@@ -105,6 +105,10 @@ async def chat_loop(
     current_segment_text = ""
     active_live = None
     is_answering = False
+    final_answer_text = ""  # Store final answer for bibliography extraction
+    
+    # Track snippets for bibliography (snippet_id -> snippet_info dict)
+    snippets_dict = {}
 
     # Helper to reduce newlines
     def clean_text(t):
@@ -162,7 +166,7 @@ async def chat_loop(
 
     # Define callback to print step updates
     def print_step_update(text, tool_calls):
-        nonlocal last_processed_text_len, current_segment_text, active_live, is_answering
+        nonlocal last_processed_text_len, current_segment_text, active_live, is_answering, snippets_dict, final_answer_text
         
         # Detect if text stream has reset (new generation started, e.g. next agent)
         if text and len(text) < last_processed_text_len:
@@ -293,6 +297,11 @@ async def chat_loop(
                             else doc.id
                         )
                         snippet_content = clean_text(doc.stringify())
+                        # Store snippet for bibliography
+                        snippets_dict[snippet_id] = {
+                            "content": snippet_content,
+                            "id": snippet_id
+                        }
                         snippet_blocks.append(
                             f"[bold]{idx + 1}. Snippet[/bold] [dim](id={snippet_id})[/dim]\n{snippet_content}"
                         )
@@ -352,6 +361,8 @@ async def chat_loop(
             last_processed_text_len = 0
             current_segment_text = ""
             active_live = None
+            final_answer_text = ""
+            snippets_dict.clear()  # Reset snippets for each query
             
             console.print("\n[bold blue]Search & Reasoning Trace:[/bold blue]")
             
@@ -377,12 +388,50 @@ async def chat_loop(
             if active_live:
                 if is_answering:
                     active_live.update(render_panel(current_segment_text, "Answer", "green", is_active=False))
+                    final_answer_text = current_segment_text  # Store final answer for bibliography
                 else:
                     active_live.update(render_panel(current_segment_text, "Thinking", "yellow", is_active=False))
                 active_live.stop()
                 active_live = None
             
             # Don't print final_response again - it's already been printed via step_callback
+            
+            # Extract citation IDs from final answer and display bibliography
+            if final_answer_text:
+                # Extract all citation IDs from the answer
+                # Pattern matches: <cite id="ID"> or <cite id='ID'> or <cite id=ID> or <cite ids="ID1,ID2">
+                citation_pattern = r'<cite\s+ids?=(["\']?)([^"\'>\s]+)\1[^>]*>'
+                citation_matches = re.findall(citation_pattern, final_answer_text)
+                cited_snippet_ids = set()
+                for quote_char, cite_id in citation_matches:
+                    # Handle comma-separated IDs (e.g., <cite id="ID1,ID2">)
+                    ids = [id.strip() for id in cite_id.split(',')]
+                    cited_snippet_ids.update(ids)
+                
+                # Display bibliography if there are cited snippets
+                if cited_snippet_ids and snippets_dict:
+                    bibliography_items = []
+                    for idx, snippet_id in enumerate(sorted(cited_snippet_ids), 1):
+                        if snippet_id in snippets_dict:
+                            snippet_info = snippets_dict[snippet_id]
+                            snippet_content = snippet_info["content"]
+                            # Truncate long snippets for display
+                            if len(snippet_content) > 300:
+                                snippet_content = snippet_content[:300] + "..."
+                            bibliography_items.append(
+                                f"[bold]{idx}. [{snippet_id}][/bold]\n{snippet_content}"
+                            )
+                    
+                    if bibliography_items:
+                        bibliography_text = "\n\n".join(bibliography_items)
+                        console.print(
+                            Panel(
+                                bibliography_text,
+                                title="[cyan]Bibliography[/cyan]",
+                                border_style="cyan",
+                            )
+                        )
+                        console.print()  # Empty line for spacing
             
             # Show detailed tool usage info
             browsed_links = result.get("browsed_links", [])
