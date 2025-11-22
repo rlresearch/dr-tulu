@@ -440,8 +440,9 @@ async def chat_loop(
                         # If no dash, treat entire ID as prefix with empty suffix
                         prefix, suffix = original_id, ""
                     
-                    # Get or create letter for this prefix                    
-                    prefix_to_letter[prefix] = number_to_letters(idx)
+                    # Get or create letter for this prefix           
+                    if prefix not in prefix_to_letter:         
+                        prefix_to_letter[prefix] = number_to_letters(idx)
                     
                     letter = prefix_to_letter[prefix]
                     # Reconstruct with letter prefix and original suffix
@@ -476,18 +477,10 @@ async def chat_loop(
             # Note: If we had final_answer_text with citations, we already updated and stopped active_live above
             if active_live:
                 if is_answering:
-                    # If we didn't process final_answer_text above (no citations or no final_answer_text), update it now
-                    if not final_answer_text:
-                        final_answer_text = current_segment_text
-                    if final_answer_text:
-                        active_live.update(render_panel(format_citations(final_answer_text), "Answer", "green", is_active=False))
+                    active_live.update(render_panel(format_citations(final_answer_text), "Answer", "green", is_active=False))
                 else:
-                    # Display the thinking text we stored earlier
                     if thinking_text:
                         active_live.update(render_panel(thinking_text, "Thinking", "yellow", is_active=False))
-                    else:
-                        # Fallback to current_segment_text if thinking_text wasn't stored
-                        active_live.update(render_panel(current_segment_text, "Thinking", "yellow", is_active=False))
                 active_live.stop()
                 active_live = None
             
@@ -515,7 +508,7 @@ async def chat_loop(
                         if url_line_found:
                             snippet_content = '\n'.join(truncated_lines)
                         bibliography_items.append(
-                            f"[bold]{idx}. \\[{display_id}\\][/bold]({tool_name})\nOriginal ID: {original_id}\n{snippet_content}"
+                            f"[bold]{idx}. \[{display_id}\][/bold]({tool_name})\nOriginal ID: {original_id}\n{snippet_content}"
                         )
                 
                 if bibliography_items:
