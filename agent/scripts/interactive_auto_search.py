@@ -404,10 +404,13 @@ async def chat_loop(
                 citation_pattern = r'<cite\s+ids?=(["\']?)([^"\'>\s]+)\1[^>]*>'
                 citation_matches = re.findall(citation_pattern, final_answer_text)
                 cited_snippet_ids = []
+                # Add IDs in order of appearance in the text
                 for quote_char, cite_id in citation_matches:
                     # Handle comma-separated IDs (e.g., <cite id="ID1,ID2">)
                     ids = [id.strip() for id in cite_id.split(',')]
-                    cited_snippet_ids += ids
+                    for id in ids:
+                        if id not in cited_snippet_ids:
+                            cited_snippet_ids += [id]
                 
                 # Display bibliography if there are cited snippets
                 if cited_snippet_ids and snippets_dict:
@@ -421,7 +424,7 @@ async def chat_loop(
                             if len(snippet_content) > 300:
                                 snippet_content = snippet_content[:300] + "..."
                             bibliography_items.append(
-                                f"[bold]{idx}. [{snippet_id}][/bold]({tool_name})\n{snippet_content}"
+                                f"[bold]{idx}. \\[{snippet_id}\\][/bold]({tool_name})\n{snippet_content}"
                             )
                     
                     if bibliography_items:
