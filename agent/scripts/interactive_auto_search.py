@@ -127,12 +127,16 @@ async def chat_loop(
     
     # Helper to format citations and think tags with Rich markup
     def format_citations(t):
-        # Format citation tags
+        # Format citation tags (handles both id= and ids=)
         def format_cite(match):
             cite_id = match.group(2)
             cite_content = match.group(3)
-            return f'[dim]<cite id="[/dim][dim cyan]{cite_id}[/dim cyan][dim]">[/dim][cyan bold]{cite_content}[/cyan bold][dim]</cite>[/dim]'
-        t = re.sub(r'<cite\s+id=(["\']?)([^"\'>\s]+)\1[^>]*>([^<]+)</cite>', format_cite, t)
+            # Format citation: show cite_id in cyan, content in bold cyan
+            # Note: cite_id should not contain brackets, but if it does, they need to be escaped for Rich
+            # For IDs like "A-4", no escaping is needed
+            return f'[dim]<cite id="[/dim][cyan]{cite_id}[/cyan][dim]">[/dim][bold cyan]{cite_content}[/bold cyan][dim]</cite>[/dim]'
+        # Match both id= and ids=, handle comma-separated IDs
+        t = re.sub(r'<cite\s+ids?=(["\']?)([^"\'>\s]+)\1[^>]*>([^<]+)</cite>', format_cite, t)
         
         # Format think tags (dimmed)
         t = t.replace("<think>", "[dim]<think>[/dim]")
@@ -471,10 +475,10 @@ async def chat_loop(
                 if id_mapping:
                     console.print("\n[bold blue]Final Answer:[/bold blue]")
                     formatted_answer = format_citations(final_answer_text)
-                    answer_renderable = Text.from_markup(formatted_answer)
+                    # Pass markup string directly to Panel - Rich will handle it correctly
                     console.print(
                         Panel(
-                            answer_renderable,
+                            formatted_answer,
                             title="[green]Answer[/green]",
                             title_align="left",
                             border_style="green"
@@ -491,12 +495,22 @@ async def chat_loop(
                             snippet_content = snippet_info["content"]
                             tool_name = snippet_info["tool_name"]
                             # Use letter-based ID for display
-                            display_id = id_mapping.get(original_id, original_id)
-                            # Truncate long snippets for display
-                            if len(snippet_content) > 300:
-                                snippet_content = snippet_content[:300] + "..."
+                            display_id = id_mapping[original_id]
+                            # Truncate snippet_content after the URL line
+                            lines = snippet_content.split('\n')
+                            truncated_lines = []
+                            url_line_found = False
+                            for line in lines:
+                                truncated_lines.append(line)
+                                # Check if this line contains "URL:" (case-insensitive)
+                                if line.strip().upper().startswith('URL:'):
+                                    url_line_found = True
+                                    break
+                            # If URL line was found, use truncated version; otherwise use original
+                            if url_line_found:
+                                snippet_content = '\n'.join(truncated_lines)
                             bibliography_items.append(
-                                f"[bold]{idx}. \\[{display_id}\\][/bold]({tool_name})\n{snippet_content}"
+                                f"[bold]{idx}. \\[{display_id}\\][/bold]({tool_name})\nOriginal ID: {original_id}\n{snippet_content}"
                             )
                     
                     if bibliography_items:
