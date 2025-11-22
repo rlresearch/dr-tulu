@@ -508,7 +508,7 @@ async def chat_loop(
                         if url_line_found:
                             snippet_content = '\n'.join(truncated_lines)
                         bibliography_items.append(
-                            f"[bold]{idx}. {display_id}[/bold]({tool_name})\nOriginal ID: {original_id}\n{snippet_content}"
+                            f"[bold]{idx}. {display_id}[/bold] ({tool_name})\nOriginal ID: {original_id}\n{snippet_content}"
                         )
                 
                 if bibliography_items:
