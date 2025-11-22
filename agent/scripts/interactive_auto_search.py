@@ -105,19 +105,39 @@ async def chat_loop(
     current_segment_text = ""
     active_live = None
     is_answering = False
+    final_answer_text = ""  # Store final answer for bibliography extraction
+    thinking_text = ""  # Store final thinking text for display
+    
+    # Track snippets for bibliography (snippet_id -> snippet_info dict)
+    snippets_dict = {}
 
+    # Helper to convert number to letter sequence (0->A, 1->B, ..., 25->Z, 26->AA, ...)
+    def number_to_letters(n):
+        """Convert a number to letter sequence: 0->A, 1->B, ..., 25->Z, 26->AA, 27->AB, ..."""
+        result = ""
+        while n >= 0:
+            result = chr(65 + (n % 26)) + result  # 65 is 'A'
+            n = n // 26 - 1
+            if n < 0:
+                break
+        return result
+    
     # Helper to reduce newlines
     def clean_text(t):
         return re.sub(r'\n{3,}', '\n\n', t)
     
     # Helper to format citations and think tags with Rich markup
     def format_citations(t):
-        # Format citation tags
+        # Format citation tags (handles both id= and ids=)
         def format_cite(match):
             cite_id = match.group(2)
             cite_content = match.group(3)
-            return f'[dim]<cite id="[/dim][dim cyan]{cite_id}[/dim cyan][dim]">[/dim][cyan bold]{cite_content}[/cyan bold][dim]</cite>[/dim]'
-        t = re.sub(r'<cite\s+id=(["\']?)([^"\'>\s]+)\1[^>]*>([^<]+)</cite>', format_cite, t)
+            # Format citation: show cite_id in cyan, content in bold cyan
+            # Note: cite_id should not contain brackets, but if it does, they need to be escaped for Rich
+            # For IDs like "A-4", no escaping is needed
+            return f'[dim]<cite id="[/dim][cyan]{cite_id}[/cyan][dim]">[/dim][bold cyan]{cite_content}[/bold cyan][dim]</cite>[/dim]'
+        # Match both id= and ids=, handle comma-separated IDs
+        t = re.sub(r'<cite\s+ids?=(["\']?)([^"\'>\s]+)\1[^>]*>([^<]+)</cite>', format_cite, t)
         
         # Format think tags (dimmed)
         t = t.replace("<think>", "[dim]<think>[/dim]")
@@ -162,7 +182,7 @@ async def chat_loop(
 
     # Define callback to print step updates
     def print_step_update(text, tool_calls):
-        nonlocal last_processed_text_len, current_segment_text, active_live, is_answering
+        nonlocal last_processed_text_len, current_segment_text, active_live, is_answering, snippets_dict, final_answer_text
         
         # Detect if text stream has reset (new generation started, e.g. next agent)
         if text and len(text) < last_processed_text_len:
@@ -293,6 +313,12 @@ async def chat_loop(
                             else doc.id
                         )
                         snippet_content = clean_text(doc.stringify())
+                        # Store snippet for bibliography
+                        snippets_dict[snippet_id] = {
+                            "content": snippet_content,
+                            "id": snippet_id,
+                            "tool_name": tool_name
+                        }
                         snippet_blocks.append(
                             f"[bold]{idx + 1}. Snippet[/bold] [dim](id={snippet_id})[/dim]\n{snippet_content}"
                         )
@@ -352,6 +378,9 @@ async def chat_loop(
             last_processed_text_len = 0
             current_segment_text = ""
             active_live = None
+            final_answer_text = ""
+            thinking_text = ""
+            snippets_dict.clear()  # Reset snippets for each query
             
             console.print("\n[bold blue]Search & Reasoning Trace:[/bold blue]")
             
@@ -373,16 +402,125 @@ async def chat_loop(
                 step_callback=print_step_update,
             )
             
-            # Finalize any remaining live display
+            # Store final text before processing (answer or thinking)
             if active_live:
                 if is_answering:
-                    active_live.update(render_panel(current_segment_text, "Answer", "green", is_active=False))
+                    final_answer_text = current_segment_text  # Store final answer for bibliography
                 else:
-                    active_live.update(render_panel(current_segment_text, "Thinking", "yellow", is_active=False))
+                    thinking_text = current_segment_text  # Store thinking text for display
+            
+            # Variables for bibliography
+            cited_snippet_ids = []
+            id_mapping = {}
+            
+            # Extract citation IDs from final answer and rewrite them
+            if final_answer_text:
+                # Extract all citation IDs from the answer
+                # Pattern matches: <cite id="ID"> or <cite id='ID'> or <cite id=ID> or <cite ids="ID1,ID2">
+                citation_pattern = r'<cite\s+ids?=(["\']?)([^"\'>\s]+)\1[^>]*>'
+                citation_matches = re.findall(citation_pattern, final_answer_text)
+                # Add IDs in order of appearance in the text
+                for quote_char, cite_id in citation_matches:
+                    # Handle comma-separated IDs (e.g., <cite id="ID1,ID2">)
+                    ids = [id.strip() for id in cite_id.split(',')]
+                    for id in ids:
+                        if id not in cited_snippet_ids:
+                            cited_snippet_ids += [id]
+                
+                # Create mapping from original IDs to letter-based IDs
+                # Map by prefix (part before dash) to preserve suffix
+                prefix_to_letter = {}
+                id_mapping = {}  # original_id -> letter_based_id (already initialized above)
+                
+                for idx, original_id in enumerate(cited_snippet_ids):
+                    # Split ID into prefix and suffix (e.g., "36a93066-7" -> prefix="36a93066", suffix="7")
+                    if '-' in original_id:
+                        prefix, suffix = original_id.rsplit('-', 1)
+                    else:
+                        # If no dash, treat entire ID as prefix with empty suffix
+                        prefix, suffix = original_id, ""
+                    
+                    # Get or create letter for this prefix           
+                    if prefix not in prefix_to_letter:         
+                        prefix_to_letter[prefix] = number_to_letters(idx)
+                    
+                    letter = prefix_to_letter[prefix]
+                    # Reconstruct with letter prefix and original suffix
+                    if suffix:
+                        new_id = f"{letter}-{suffix}"
+                    else:
+                        new_id = letter
+                    
+                    id_mapping[original_id] = new_id
+                
+                # Replace IDs in final_answer_text
+                def replace_cite_id(match):
+                    quote_char = match.group(1)
+                    original_ids_str = match.group(2)
+                    # Handle comma-separated IDs
+                    original_ids = [id.strip() for id in original_ids_str.split(',')]
+                    new_ids = [id_mapping.get(id, id) for id in original_ids]
+                    new_ids_str = ','.join(new_ids)
+                    # Use 'ids' if multiple IDs, 'id' if single
+                    attr_name = 'ids' if len(new_ids) > 1 else 'id'
+                    return f'<cite {attr_name}={quote_char}{new_ids_str}{quote_char}>'
+                
+                # Replace all citation IDs in the text
+                final_answer_text = re.sub(
+                    r'<cite\s+ids?=(["\']?)([^"\'>\s]+)\1[^>]*>',
+                    replace_cite_id,
+                    final_answer_text
+                )
+                
+            
+            # Finalize any remaining live display (if not already done)
+            # Note: If we had final_answer_text with citations, we already updated and stopped active_live above
+            if active_live:
+                if is_answering:
+                    active_live.update(render_panel(format_citations(final_answer_text), "Answer", "green", is_active=False))
+                else:
+                    if thinking_text:
+                        active_live.update(render_panel(thinking_text, "Thinking", "yellow", is_active=False))
                 active_live.stop()
                 active_live = None
             
-            # Don't print final_response again - it's already been printed via step_callback
+            # Display bibliography after the final answer (if we have citations)
+            if final_answer_text and cited_snippet_ids and snippets_dict:
+                bibliography_items = []
+                for original_id in cited_snippet_ids:
+                    if original_id in snippets_dict:
+                        snippet_info = snippets_dict[original_id]
+                        snippet_content = snippet_info["content"]
+                        tool_name = snippet_info["tool_name"]
+                        # Use letter-based ID for display
+                        display_id = id_mapping.get(original_id, original_id)
+                        # Truncate snippet_content after the URL line
+                        lines = snippet_content.split('\n')
+                        truncated_lines = []
+                        url_line_found = False
+                        for line in lines:
+                            truncated_lines.append(line)
+                            # Check if this line contains "URL:" (case-insensitive)
+                            if line.strip().upper().startswith('URL:'):
+                                url_line_found = True
+                                break
+                        # If URL line was found, use truncated version; otherwise use original
+                        if url_line_found:
+                            snippet_content = '\n'.join(truncated_lines)
+                        bibliography_items.append(
+                            f"[bold]{display_id}[/bold] ({tool_name})\nOriginal ID: {original_id}\n{snippet_content}"
+                        )
+                
+                if bibliography_items:
+                    bibliography_text = "\n\n".join(bibliography_items)
+                    console.print(
+                        Panel(
+                            bibliography_text,
+                            title="[cyan]Bibliography[/cyan]",
+                            border_style="cyan",
+                        )
+                    )
+                    console.print()  # Empty line for spacing
             
             # Show detailed tool usage info
             browsed_links = result.get("browsed_links", [])
