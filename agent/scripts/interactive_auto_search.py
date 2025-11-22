@@ -402,16 +402,16 @@ async def chat_loop(
                 # Pattern matches: <cite id="ID"> or <cite id='ID'> or <cite id=ID> or <cite ids="ID1,ID2">
                 citation_pattern = r'<cite\s+ids?=(["\']?)([^"\'>\s]+)\1[^>]*>'
                 citation_matches = re.findall(citation_pattern, final_answer_text)
-                cited_snippet_ids = set()
+                cited_snippet_ids = []
                 for quote_char, cite_id in citation_matches:
                     # Handle comma-separated IDs (e.g., <cite id="ID1,ID2">)
                     ids = [id.strip() for id in cite_id.split(',')]
-                    cited_snippet_ids.update(ids)
+                    cited_snippet_ids += ids
                 
                 # Display bibliography if there are cited snippets
                 if cited_snippet_ids and snippets_dict:
                     bibliography_items = []
-                    for idx, snippet_id in enumerate(sorted(cited_snippet_ids), 1):
+                    for idx, snippet_id in enumerate(cited_snippet_ids, 1):
                         if snippet_id in snippets_dict:
                             snippet_info = snippets_dict[snippet_id]
                             snippet_content = snippet_info["content"]
