@@ -487,7 +487,7 @@ async def chat_loop(
             # Display bibliography after the final answer (if we have citations)
             if final_answer_text and cited_snippet_ids and snippets_dict:
                 bibliography_items = []
-                for idx, original_id in enumerate(cited_snippet_ids, 1):
+                for original_id in cited_snippet_ids:
                     if original_id in snippets_dict:
                         snippet_info = snippets_dict[original_id]
                         snippet_content = snippet_info["content"]
@@ -508,7 +508,7 @@ async def chat_loop(
                         if url_line_found:
                             snippet_content = '\n'.join(truncated_lines)
                         bibliography_items.append(
-                            f"[bold]{idx}. {display_id}[/bold] ({tool_name})\nOriginal ID: {original_id}\n{snippet_content}"
+                            f"[bold]{display_id}[/bold] ({tool_name})\nOriginal ID: {original_id}\n{snippet_content}"
                         )
                 
                 if bibliography_items:
