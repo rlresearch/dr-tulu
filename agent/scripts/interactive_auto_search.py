@@ -475,6 +475,10 @@ def chat(
     if "browse_timeout" not in overrides:
         overrides["browse_timeout"] = 10
     
+    # Set prompt version for CLI agent
+    if "prompt_version" not in overrides:
+        overrides["prompt_version"] = "cli"
+
     # Create workflow
     try:
         workflow = AutoReasonSearchWorkflow(

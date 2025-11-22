@@ -70,13 +70,17 @@ Can you clean the raw webpage text and convert it into a more readable format? Y
 
 @dataclass
 class SearchAgent(BaseAgent):
+    prompt_version: str = "v20250907"
+
     def prompt(
         self,
         question: str,
         dataset_name: Optional[str] = None,
     ) -> str:
 
-        PROMPT = UNIFIED_TOOL_CALLING_STRUCTURED_PROMPTS["v20250907"]
+        PROMPT = UNIFIED_TOOL_CALLING_STRUCTURED_PROMPTS[self.prompt_version]
+        system_prompt = PROMPT["system_prompt"]
+
         if dataset_name in [
             "2wiki",
             "simpleqa",
@@ -112,7 +116,7 @@ class SearchAgent(BaseAgent):
         return [
             {
                 "role": "system",
-                "content": PROMPT["system_prompt"],
+                "content": system_prompt,
             },
             {
                 "role": "user",
@@ -147,10 +151,11 @@ class SearchAgent(BaseAgent):
 
 @dataclass
 class AnswerAgent(BaseAgent):
+    prompt_version: str = "v20250907"
 
     def prompt(self, question: str, history: str, dataset_name: str) -> str:
 
-        PROMPT = UNIFIED_TOOL_CALLING_STRUCTURED_PROMPTS["v20250907"]
+        PROMPT = UNIFIED_TOOL_CALLING_STRUCTURED_PROMPTS[self.prompt_version]
         if dataset_name in [
             "2wiki",
             "simpleqa",
@@ -281,6 +286,8 @@ class AutoReasonSearchWorkflow(BaseWorkflow):
         browse_context_char_length: int = 6000
         crawl4ai_use_docker_version: bool = False
         crawl4ai_use_ai2_config: bool = False
+
+        prompt_version: str = "v20250907"
 
     def setup_components(
         self,
@@ -434,9 +441,11 @@ class AutoReasonSearchWorkflow(BaseWorkflow):
             self.search_agent = SearchAgent(
                 client=client,
                 tools=[self.search_tool, self.search_tool2, self.composed_browse_tool],
+                prompt_version=cfg.prompt_version,
             )
             self.answer_agent = AnswerAgent(
                 client=client,
+                prompt_version=cfg.prompt_version,
             )
 
     async def __call__(
