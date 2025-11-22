@@ -471,11 +471,6 @@ async def chat_loop(
                     final_answer_text
                 )
                 
-                # Update the live display with the formatted answer (with rewritten IDs) if we're still answering
-                if active_live and is_answering:
-                    active_live.update(render_panel(format_citations(final_answer_text), "Answer", "green", is_active=False))
-                    active_live.stop()
-                    active_live = None
             
             # Finalize any remaining live display (if not already done)
             # Note: If we had final_answer_text with citations, we already updated and stopped active_live above
