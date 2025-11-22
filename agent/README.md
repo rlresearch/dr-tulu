@@ -74,6 +74,9 @@ export JINA_API_KEY="XXXX"
 uv run --extra vllm  python scripts/launch_chat.py --model rl-research/DR-Tulu-8B
 ```
 
+Note for this cli demo, we use a slightly different prompt than the one used for evaluation in our paper, for demo purposes. The prompt is in the file `dr_agent/shared_prompts/unified_tool_calling_cli.yaml`.
+
+
 We provide additional flags for the chat script, for e.g. showing full tool output:
 ```bash
 usage: launch_chat.py [-h] [--config CONFIG] [--dataset-name DATASET_NAME]
