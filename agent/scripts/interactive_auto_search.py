@@ -403,7 +403,7 @@ async def chat_loop(
             # Finalize any remaining live display
             if active_live:
                 if is_answering:
-                    active_live.update(render_panel(current_segment_text, "Answer", "green", is_active=False))
+                    # active_live.update(render_panel(current_segment_text, "Answer", "green", is_active=False))
                     final_answer_text = current_segment_text  # Store final answer for bibliography
                 else:
                     active_live.update(render_panel(current_segment_text, "Thinking", "yellow", is_active=False))
@@ -471,20 +471,8 @@ async def chat_loop(
                     final_answer_text
                 )
                 
-                # Re-display the final answer with rewritten IDs
-                if id_mapping:
-                    console.print("\n[bold blue]Final Answer:[/bold blue]")
-                    formatted_answer = format_citations(final_answer_text)
-                    # Pass markup string directly to Panel - Rich will handle it correctly
-                    console.print(
-                        Panel(
-                            formatted_answer,
-                            title="[green]Answer[/green]",
-                            title_align="left",
-                            border_style="green"
-                        )
-                    )
-                    console.print()  # Empty line for spacing
+                # Display the final answer with rewritten IDs
+                active_live.update(render_panel(format_citations(final_answer_text), "Answer", "green", is_active=False))                
                 
                 # Display bibliography if there are cited snippets
                 if cited_snippet_ids and snippets_dict:
