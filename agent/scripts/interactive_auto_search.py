@@ -300,7 +300,8 @@ async def chat_loop(
                         # Store snippet for bibliography
                         snippets_dict[snippet_id] = {
                             "content": snippet_content,
-                            "id": snippet_id
+                            "id": snippet_id,
+                            "tool_name": tool_name
                         }
                         snippet_blocks.append(
                             f"[bold]{idx + 1}. Snippet[/bold] [dim](id={snippet_id})[/dim]\n{snippet_content}"
@@ -415,11 +416,12 @@ async def chat_loop(
                         if snippet_id in snippets_dict:
                             snippet_info = snippets_dict[snippet_id]
                             snippet_content = snippet_info["content"]
+                            tool_name = snippet_info["tool_name"]
                             # Truncate long snippets for display
                             if len(snippet_content) > 300:
                                 snippet_content = snippet_content[:300] + "..."
                             bibliography_items.append(
-                                f"[bold]{idx}. [{snippet_id}][/bold]\n{snippet_content}"
+                                f"[bold]{idx}. [{snippet_id}][/bold]({tool_name})\n{snippet_content}"
                             )
                     
                     if bibliography_items:
