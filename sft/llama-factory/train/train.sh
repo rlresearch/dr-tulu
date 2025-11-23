@@ -5,7 +5,7 @@ if [ -f .env ]; then
     export $(grep -v '^#' .env | xargs)
 fi
 
-export WANDB_PROJECT="rl-rag-sft"
+export WANDB_PROJECT="rl-research"
 export NCCL_DEBUG=INFO
 export NCCL_TIMEOUT=3600
 

@@ -17,13 +17,14 @@ cd dr-tulu/sft/llama-factory
 
 Install the dependencies:
 ```bash
-pip install -e ".[torch,metrics]" --no-build-isolation
+uv pip install -e ".[torch,metrics]" --no-build-isolation
+uv pip install wandb deepspeed==0.15.4
 ```
 
 ## Training
 
-Training configuration files can be found in the `rl-rag-train/` directory. To run training:
+Training configuration files can be found in the `train/` directory. To run training:
 
 ```bash
-bash rl-rag-train/train.sh rl-rag-train/qwen3-8B-sft-final.yaml
+bash train/train.sh train/qwen3-8B-sft-final.yaml
 ```
