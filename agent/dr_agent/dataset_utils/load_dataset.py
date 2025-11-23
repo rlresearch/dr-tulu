@@ -2,12 +2,14 @@ import base64
 import hashlib
 import json
 import random
+import tempfile
 import urllib.request
 from pathlib import Path
 from typing import Dict, List, Optional
 
+import datasets
 import pandas as pd
-from datasets import load_dataset as hf_load_dataset
+from huggingface_hub import hf_hub_download
 
 from .data_types import DatasetConfig
 
@@ -290,7 +292,7 @@ def load_healthbench_data(
 
 def load_deep_scholar_bench_data(num_examples: Optional[int] = None) -> List[Dict]:
     """Load Deep Scholar Bench dataset data."""
-    raw_data = hf_load_dataset("xinranz3/deepscholar_bench_fixed", "default")
+    raw_data = datasets.load_dataset("xinranz3/deepscholar_bench_fixed", "default")
 
     examples = []
     for sample in raw_data["train"]:
@@ -312,7 +314,7 @@ def load_sqav2_data(
     num_examples: Optional[int] = None, shuffle: bool = False
 ) -> List[Dict]:
     """Load SQA v2 dataset data."""
-    data = hf_load_dataset(
+    data = datasets.load_dataset(
         "allenai/asta-bench",
         data_files="tasks/sqa/rubrics_v2_recomputed.json",
         split="train",
@@ -344,10 +346,10 @@ def load_genetic_diseases_qa_data(
     """Load Genetic Variants QA dataset data."""
     dataset_repo = SUPPORTED_TASKS["genetic_diseases_qa"]
 
-    question_types_data = hf_load_dataset(
+    question_types_data = datasets.load_dataset(
         dataset_repo, data_files="question_types.json", split="train"
     )
-    rare_variants_data = hf_load_dataset(
+    rare_variants_data = datasets.load_dataset(
         dataset_repo, data_files="rare_variants_qa.json", split="train"
     )
 
@@ -395,14 +397,22 @@ def load_researchqa_data(
         List of ResearchQA examples
     """
     dataset_repo = SUPPORTED_TASKS["researchqa"]
-    data = hf_load_dataset(dataset_repo, split="test")
+    data = datasets.load_dataset(dataset_repo, split="test")
 
     # Try to load official subset IDs if available
-    official_ids_path = Path(__file__).parent / "researchqa_official_subset_ids.json"
-    if official_ids_path.exists():
-        with open(official_ids_path, "r") as f:
+    with tempfile.TemporaryDirectory() as temp_dir:
+        json_path = hf_hub_download(
+            repo_id="rl-research/researchqa_official_subset_ids",
+            filename="researchqa_official_subset_ids.json",
+            repo_type="dataset",
+            cache_dir=temp_dir,
+        )
+
+        # Load the JSON file directly (it's a list of strings)
+        with open(json_path, "r") as f:
             official_ids = json.load(f)
-        data = data.filter(lambda x: x["id"] in official_ids)
+
+    data = data.filter(lambda x: x["id"] in official_ids)
 
     examples = []
     for sample in data:
