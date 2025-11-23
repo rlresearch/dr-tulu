@@ -70,13 +70,17 @@ Can you clean the raw webpage text and convert it into a more readable format? Y
 
 @dataclass
 class SearchAgent(BaseAgent):
+    prompt_version: str = "v20250907"
+
     def prompt(
         self,
         question: str,
         dataset_name: Optional[str] = None,
     ) -> str:
 
-        PROMPT = UNIFIED_TOOL_CALLING_STRUCTURED_PROMPTS["v20250907"]
+        PROMPT = UNIFIED_TOOL_CALLING_STRUCTURED_PROMPTS[self.prompt_version]
+        system_prompt = PROMPT["system_prompt"]
+
         if dataset_name in [
             "2wiki",
             "simpleqa",
@@ -91,7 +95,7 @@ class SearchAgent(BaseAgent):
             instruction_field_name = "long_form"
         elif dataset_name in ["healthbench", "deep_research_bench", "researchqa"]:
             instruction_field_name = "short_form"
-        elif "sft-mix" in dataset_name:
+        elif dataset_name and "sft-mix" in dataset_name:
             if "short_form" in dataset_name:
                 instruction_field_name = "exact_answer"
             elif "long_form" in dataset_name:
@@ -112,7 +116,7 @@ class SearchAgent(BaseAgent):
         return [
             {
                 "role": "system",
-                "content": PROMPT["system_prompt"],
+                "content": system_prompt,
             },
             {
                 "role": "user",
@@ -147,10 +151,11 @@ class SearchAgent(BaseAgent):
 
 @dataclass
 class AnswerAgent(BaseAgent):
+    prompt_version: str = "v20250907"
 
     def prompt(self, question: str, history: str, dataset_name: str) -> str:
 
-        PROMPT = UNIFIED_TOOL_CALLING_STRUCTURED_PROMPTS["v20250907"]
+        PROMPT = UNIFIED_TOOL_CALLING_STRUCTURED_PROMPTS[self.prompt_version]
         if dataset_name in [
             "2wiki",
             "simpleqa",
@@ -265,6 +270,11 @@ class AutoReasonSearchWorkflow(BaseWorkflow):
         browse_agent_max_tokens: int = 32000
         browse_agent_temperature: float = 0.3
 
+        # MCP transport configuration
+        mcp_transport_type: str = "StreamableHttpTransport"
+        mcp_executable: Optional[str] = None
+        mcp_port: int = 8000
+
         # Search configuration
         number_documents_to_search: int = 10
         search_timeout: int = 60
@@ -277,6 +287,8 @@ class AutoReasonSearchWorkflow(BaseWorkflow):
         crawl4ai_use_docker_version: bool = False
         crawl4ai_use_ai2_config: bool = False
 
+        prompt_version: str = "v20250907"
+
     def setup_components(
         self,
         mcp_transport_type: Optional[str] = "StreamableHttpTransport",
@@ -286,6 +298,14 @@ class AutoReasonSearchWorkflow(BaseWorkflow):
         cfg = self.configuration
         assert cfg is not None
         # print(cfg)
+
+        # Allow configuration overrides for MCP settings
+        if getattr(cfg, "mcp_transport_type", None):
+            mcp_transport_type = cfg.mcp_transport_type
+        if getattr(cfg, "mcp_executable", None):
+            mcp_executable = cfg.mcp_executable
+        if getattr(cfg, "mcp_port", None) is not None:
+            mcp_port = cfg.mcp_port
 
         # Search and browse tools (MCP-backed) with unified tool parser
         if cfg.search_tool_name == "serper":
@@ -421,9 +441,11 @@ class AutoReasonSearchWorkflow(BaseWorkflow):
             self.search_agent = SearchAgent(
                 client=client,
                 tools=[self.search_tool, self.search_tool2, self.composed_browse_tool],
+                prompt_version=cfg.prompt_version,
             )
             self.answer_agent = AnswerAgent(
                 client=client,
+                prompt_version=cfg.prompt_version,
             )
 
     async def __call__(
@@ -431,6 +453,8 @@ class AutoReasonSearchWorkflow(BaseWorkflow):
         problem: str,
         dataset_name: Optional[str] = None,
         verbose: bool = True,
+        search_callback: Optional[Any] = None,
+        step_callback: Optional[Any] = None,
     ) -> Dict[str, Any]:
         cfg = self.configuration
         assert cfg is not None
@@ -458,7 +482,14 @@ class AutoReasonSearchWorkflow(BaseWorkflow):
             temperature=cfg.search_agent_temperature,
             max_tool_calls=cfg.search_agent_max_tool_calls,
             verbose=verbose,
+            on_step_callback=step_callback,
         )
+
+        if search_callback:
+            if asyncio.iscoroutinefunction(search_callback):
+                await search_callback(results)
+            else:
+                search_callback(results)
 
         browsed_links = []
         searched_links = []
@@ -519,6 +550,7 @@ class AutoReasonSearchWorkflow(BaseWorkflow):
             max_tokens=cfg.search_agent_max_tokens,
             temperature=cfg.search_agent_temperature,
             verbose=verbose,
+            on_step_callback=step_callback,
         )
 
         if verbose:

@@ -60,3 +60,68 @@ Note you will need to get these API keys from the respective services.
     export OPENAI_API_KEY="XXXX"
     bash scripts/auto_search-oai.sh
     ```
+
+## Interactive Chat
+
+We provide an interactive cli demo for the auto_search workflow.
+Requires 1-2 GPUs. We recommend running with `uv`, which should install everything you need and then launch the tool, but set your API keys first:
+
+```bash
+export SERPER_API_KEY="XXXX"
+export S2_API_KEY="XXXX"
+export JINA_API_KEY="XXXX"
+
+uv run --extra vllm  python scripts/launch_chat.py --model rl-research/DR-Tulu-8B
+```
+
+Note for this cli demo, we use a slightly different prompt than the one used for evaluation in our paper, for demo purposes. The prompt is in the file `dr_agent/shared_prompts/unified_tool_calling_cli.yaml`.
+
+
+We provide additional flags for the chat script, for e.g. showing full tool output:
+```bash
+usage: launch_chat.py [-h] [--config CONFIG] [--dataset-name DATASET_NAME]
+                      [--model MODEL] [--config-overrides CONFIG_OVERRIDES]
+                      [--verbose] [--show-full-tool-output] [--skip-checks]
+                      [--mcp-port MCP_PORT] [--gpu-id GPU_ID]
+                      [--no-auto-launch]
+
+Self-contained launcher for interactive chat
+
+options:
+  -h, --help            show this help message and exit
+  --config CONFIG, -c CONFIG
+                        Config file path (default:
+                        workflows/auto_search_sft.yaml)
+  --dataset-name DATASET_NAME, -d DATASET_NAME
+                        Dataset name for dataset-specific instructions
+  --model MODEL, -m MODEL
+                        Main model name (for search agent). If not provided,
+                        uses config defaults.
+  --config-overrides CONFIG_OVERRIDES
+                        Config overrides (e.g., 'param1=value1,param2=value2')
+  --verbose, -v         Enable verbose output
+  --show-full-tool-output
+                        Show full tool output instead of truncating to 500
+                        characters
+  --skip-checks         Skip checking/launching services
+  --mcp-port MCP_PORT   MCP server port (default: 8000)
+  --gpu-id GPU_ID       GPU ID for search agent vLLM server (default: 0,
+                        browse agent uses GPU 1)
+  --no-auto-launch      Don't automatically launch vLLM servers (check only)
+
+Examples:
+  # Basic usage (auto-launches MCP server and vLLM servers if needed)
+  python scripts/launch_chat.py
+
+  # With specific model (auto-launches both vLLM servers on GPUs 0 and 1)
+  python scripts/launch_chat.py --model rl-research/DR-Tulu-8B
+
+  # Skip service checks (if services are already running)
+  python scripts/launch_chat.py --skip-checks
+
+  # Don't auto-launch vLLM servers (just check)
+  python scripts/launch_chat.py --no-auto-launch
+
+  # Custom config file
+  python scripts/launch_chat.py --config workflows/auto_search_sft.yaml
+```
