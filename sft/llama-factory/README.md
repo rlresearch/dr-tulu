@@ -25,5 +25,5 @@ pip install -e ".[torch,metrics]" --no-build-isolation
 Training configuration files can be found in the `rl-rag-train/` directory. To run training:
 
 ```bash
-bash train.sh rl-rag-train/qwen3-8B-sft-final.yaml
+bash rl-rag-train/train.sh rl-rag-train/qwen3-8B-sft-final.yaml
 ```
