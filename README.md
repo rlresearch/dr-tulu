@@ -23,11 +23,13 @@ DR Tulu-8B is the first open Deep Research (DR) model trained for long-form DR t
 
 ## Overview
 
-This repository contains two main components:
+This repository contains three main components:
 
 - **[`agent/`](agent/)**: Agent library (`dr-agent-lib`) with MCP-based tool backend, high-concurrency async request management, and flexible prompting interface for developing and training deep research agents.
 
 - **[`rl/`](rl/open-instruct/)**: RL training code based on [Open-Instruct](https://github.com/allenai/open-instruct) for training deep research agents with GRPO and evolving rubrics.
+
+- **[`sft/`](sft/llama-factory/)**: SFT training code based on [LLaMA-Factory](https://github.com/hiyouga/LLaMA-Factory) for supervised fine-tuning of deep research agents.
 
 For detailed setup and usage instructions, see the README files in each subdirectory.
 
