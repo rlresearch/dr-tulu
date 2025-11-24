@@ -17,7 +17,9 @@ SAVE_MODEL_NAME=auto_search_sft
 
 mkdir -p $SAVE_FOLDER
 
-for task in sqav2; do 
+TASKS="deep_research_bench healthbench sqav2 genetic_diseases_qa 2wiki webwalker simpleqa browsecomp"
+
+for task in $TASKS; do 
     echo "Running $MODEL on $task"
     python workflows/$MODEL.py \
         generate-dataset $task \
@@ -26,6 +28,6 @@ for task in sqav2; do
         --batch-size $MAX_CONCURRENT \
         --use-cache \
         --config $YAML_CONFIG \
-        --config-overrides "use_browse_agent=true,search_tool_name=s2,search_agent_max_tool_calls=10, browse_tool_name=jina" \
-        --output $SAVE_FOLDER/$SAVE_MODEL_NAME/$task-ablation-s2.jsonl
+        --config-overrides "use_browse_agent=true,search_tool_name=s2,search_agent_max_tool_calls=10,browse_tool_name=jina" \
+        --output $SAVE_FOLDER/$SAVE_MODEL_NAME/$task-final_run.jsonl
 done

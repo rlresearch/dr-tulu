@@ -7,31 +7,34 @@
 - **High Concurrency**: Global caching and async request management for RL training at scale
 - **Flexible Prompting Interface**: Easy composition of search workflows with fine-grained control
 
-## Setup 
+## Setting up 
 
 Below we assume you are already in the `agent` directory. 
 
-```bash
-conda create -n dr_agent python=3.10 -y && conda activate dr_agent
+1. Installing the `dr_agent` library 
 
-uv pip install -e .     # Install dev version
-uv pip install dr_agent # Install from pypi 
-```
+    ```bash
+    conda create -n dr_agent python=3.10 -y && conda activate dr_agent
 
-If you run crawl4ai locally, you will need to install playwright and its dependencies.
+    uv pip install -e .     # Option 1: Install dev version
+    uv pip install dr_agent # Option 2: Install from pypi 
+    ```
 
-Set up API keys via `.env` file:
-```bash
-S2_API_KEY=xxx
-SERPER_API_KEY=xxx
-JINA_API_KEY=xxx
-```
-Note you will need to get these API keys from the respective services.
-- S2_API_KEY: https://api.semanticscholar.org/
-- SERPER_API_KEY: https://serper.dev/
-- JINA_API_KEY: https://jina.ai/reader/
+2. Setting up the tools and MCP backend 
 
-## Getting started 
+    1. Check the `.env.example` file and configure your API keys accordingly. You can find it via 
+       - S2_API_KEY: https://api.semanticscholar.org/
+       - SERPER_API_KEY: https://serper.dev/
+       - JINA_API_KEY: https://jina.ai/reader/
+    2. If you run crawl4ai locally, you will need to install playwright and its dependencies. See [their instructions](https://github.com/unclecode/crawl4ai?tab=readme-ov-file#-quick-start). 
+
+3. If you need to host the models locally, you may need to install VLLM: 
+
+    ```bash
+    uv pip install vllm --torch-backend=auto  
+    ```
+
+## Quick Start 
 
 1. Launch MCP Server 
 
@@ -60,6 +63,11 @@ Note you will need to get these API keys from the respective services.
     export OPENAI_API_KEY="XXXX"
     bash scripts/auto_search-oai.sh
     ```
+
+## Generating and running evaluations on all the datasets  
+
+In the [`scripts/auto_search.sh`](dr_agent/scripts/auto_search.sh), it runs inference and evaluation for all the used datasets in our paper. 
+
 
 ## Interactive Chat
 
