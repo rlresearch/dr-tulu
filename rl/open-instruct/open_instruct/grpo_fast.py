@@ -995,6 +995,7 @@ class PolicyTrainerRayProcess(RayProcess):
                         kl = kl4
 
                     # grpo change: directly subtract KL in loss (add)
+                    kl = torch.clamp(kl, min=-5.0, max=5.0)  # Clamp KL post-estimator to prevent overpowering PG (GRPO stability guard)
                     loss_components = pg_loss_max + (args.beta * kl)
                     loss_components = torch.clamp(loss_components, min=-10.0, max=10.0)
                     loss = masked_mean(loss_components, mb_response_masks_bool, args.masked_mean_axis)
