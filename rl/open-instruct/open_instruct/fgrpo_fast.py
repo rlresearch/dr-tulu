@@ -881,7 +881,18 @@ class PolicyTrainerRayProcess(RayProcess):
                     logprobs_diff_list = [mb_new_logprobs_list[j] - mb_old_logprobs_list[j] for j in range(len(mb_advantages_list))]
                     ratio_list = [torch.exp(logprobs_diff_list[j]) for j in range(len(mb_advantages_list))]
                     
-                    pg_losses_list = [-mb_advantages_list[j][:, 1:] * ratio_list[j] for j in range(len(mb_advantages_list))]
+                    # Correct adv norm: (masked_adv - mean) / std w/ guards (std PPO/GRPO; prevents NaN/crash/biases)
+masked_adv = mb_advantages_list[0][mb_response_masks_bool]
+if masked_adv.numel() == 0:
+    adv_mean = torch.tensor(0.0, device=masked_adv.device, dtype=masked_adv.dtype)
+    adv_std = torch.tensor(1.0, device=masked_adv.device, dtype=masked_adv.dtype)
+else:
+    adv_mean = masked_adv.mean()
+    adv_var = masked_adv.var(unbiased=False)
+    adv_std = torch.sqrt(adv_var.clamp(min=1e-8)) + 1e-5
+mb_advantages_list[0][mb_response_masks_bool] -= adv_mean
+mb_advantages_list[0][mb_response_masks_bool] /= adv_std
+pg_losses_list = [-mb_advantages_list[j][:, 1:] * ratio_list[j] for j in range(len(mb_advantages_list))]
                     pg_losses2_list = [-mb_advantages_list[j][:, 1:] * torch.clamp(
                         ratio_list[j], 1.0 - args.clip_lower, 1.0 + args.clip_higher
                     ) for j in range(len(mb_advantages_list))]
