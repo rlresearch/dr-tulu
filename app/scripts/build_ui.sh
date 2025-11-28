@@ -1,16 +1,19 @@
 #!/bin/bash
-
-# Build script for creating static UI files for Python package distribution
 set -e
 
-echo "======================================"
-echo "Building DR-Agent UI for Python"
-echo "======================================"
-echo ""
+# Script to build static UI files for Python package distribution
+# Usage: ./scripts/build_ui.sh
 
-# Check if we're in the right directory
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
+
+cd "$PROJECT_DIR"
+
+echo "===== Building DR-Agent UI for Python ====="
+
+# Check if package.json exists
 if [ ! -f "package.json" ]; then
-    echo "Error: Must run from the app/ directory"
+    echo "Error: package.json not found in $PROJECT_DIR"
     exit 1
 fi
 
@@ -18,13 +21,11 @@ fi
 if [ ! -d "node_modules" ]; then
     echo "Installing dependencies..."
     npm install
-    echo ""
 fi
 
-# Build and export
+# Build and export Next.js application
 echo "Building Next.js application..."
 npm run build
-echo ""
 
 # Copy static files to Python package
 SOURCE_DIR="./out"
@@ -45,11 +46,10 @@ fi
 # Copy new static files
 echo "Copying files from $SOURCE_DIR to $TARGET_DIR..."
 cp -r "$SOURCE_DIR" "$TARGET_DIR"
-echo ""
 
 # Verify output
 if [ -f "$TARGET_DIR/index.html" ]; then
-    echo "✅ Build successful!"
+    echo "===== Successfully built dr-agent-ui! ====="
     echo ""
     echo "Static files are available at: $TARGET_DIR"
     echo ""
@@ -58,9 +58,11 @@ if [ -f "$TARGET_DIR/index.html" ]; then
     echo "  2. Access UI at: http://localhost:8080"
     echo ""
     echo "To publish to PyPI:"
-    echo "  cd python && python -m build && python -m twine upload dist/*"
+    echo "  ./scripts/publish_to_pypi.sh"
 else
-    echo "❌ Build failed - index.html not found"
+    echo "Error: Build failed - index.html not found"
     exit 1
 fi
+
+
 

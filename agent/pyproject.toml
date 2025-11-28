@@ -55,6 +55,11 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+ui = [
+    "dr-agent-ui==0.1.0",
+    "fastapi",
+    "uvicorn[standard]",
+]
 dev = [
     "pytest",
     "pytest-asyncio",

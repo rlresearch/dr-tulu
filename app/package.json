@@ -13,7 +13,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "build-python": "./build-for-python.sh",
+    "build-python": "./scripts/build_ui.sh",
     "start": "next start",
     "lint": "next lint"
   },
