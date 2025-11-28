@@ -1,5 +1,5 @@
 """
-FastAPI SSE server for live chat with AutoReasonSearchWorkflow.
+FastAPI SSE server for live chat with BaseWorkflow instances.
 
 This module provides an SSE endpoint that streams workflow responses
 to the frontend, including thinking text, tool calls, and final answers.
@@ -8,35 +8,15 @@ to the frontend, including thinking text, tool calls, and final answers.
 import asyncio
 import json
 import re
-from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from dr_agent.tool_interface.data_types import DocumentToolOutput, ToolOutput
-from fastapi import FastAPI, Request
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
-from workflows.auto_search_sft import AutoReasonSearchWorkflow
 
-app = FastAPI(title="DR-Tulu Chat API")
-
-# Enable CORS for local development
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-# Global workflow instance (initialized via run.py)
-workflow: Optional[AutoReasonSearchWorkflow] = None
-
-
-def set_workflow(wf: AutoReasonSearchWorkflow):
-    """Set the global workflow instance."""
-    global workflow
-    workflow = wf
+from ..tool_interface.data_types import DocumentToolOutput, ToolOutput
+from ..workflow import BaseWorkflow
 
 
 class Message(BaseModel):
@@ -224,121 +204,145 @@ class SSECallback:
             self.thinking_segment_id += 1
 
 
-async def run_workflow_with_streaming(
-    content: str,
-    dataset_name: str,
-    event_queue: asyncio.Queue,
-    messages: Optional[List[Dict[str, str]]] = None,
-):
-    """Run the workflow and stream events via the queue."""
-    callback = SSECallback(event_queue)
+def create_app(workflow_instance: BaseWorkflow) -> FastAPI:
+    """
+    Create a FastAPI app configured to serve the given workflow.
 
-    # Send started event
-    await event_queue.put(f'data: {{"type": "started"}}\n\n')
+    Args:
+        workflow_instance: A BaseWorkflow instance to serve
 
-    result = await workflow(
-        problem=content,
-        dataset_name=dataset_name,
-        messages=messages,
-        verbose=False,
-        step_callback=callback,
+    Returns:
+        Configured FastAPI application
+    """
+    app = FastAPI(title="DR-Agent Chat API")
+
+    # Enable CORS for local development
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
     )
 
-    # Send final answer if available
-    final_response = result.get("final_response", "")
-    if final_response:
-        await event_queue.put(
-            f'data: {json.dumps({"type": "answer", "content": final_response, "is_final": True})}\n\n'
+    # Store workflow in app state
+    app.state.workflow = workflow_instance
+
+    async def run_workflow_with_streaming(
+        content: str,
+        dataset_name: str,
+        event_queue: asyncio.Queue,
+        messages: Optional[List[Dict[str, str]]] = None,
+    ):
+        """Run the workflow and stream events via the queue."""
+        callback = SSECallback(event_queue)
+
+        # Send started event
+        await event_queue.put(f'data: {{"type": "started"}}\n\n')
+
+        result = await app.state.workflow(
+            problem=content,
+            dataset_name=dataset_name,
+            messages=messages,
+            verbose=False,
+            step_callback=callback,
         )
 
-    # Send done message with metadata
-    done_msg = {
-        "type": "done",
-        "metadata": {
-            "total_tool_calls": result.get("total_tool_calls", 0),
-            "failed_tool_calls": result.get("total_failed_tool_calls", 0),
-            "browsed_links": result.get("browsed_links", []),
-            "searched_links": result.get("searched_links", []),
-            "snippets": callback.snippets,
-        },
-    }
-    await event_queue.put(f"data: {json.dumps(done_msg)}\n\n")
-
-    # Signal completion
-    await event_queue.put(None)
-
-
-@app.post("/chat/stream")
-async def chat_stream(request: ChatRequest):
-    """
-    SSE endpoint for chat interactions.
-
-    Client sends: { "content": "...", "dataset_name": "..." }
-    Server streams: SSE events for thinking, tool_call, answer, done, error
-    """
-    if workflow is None:
-        return StreamingResponse(
-            iter(
-                [
-                    f'data: {json.dumps({"type": "error", "message": "Workflow not initialized"})}\n\n'
-                ]
-            ),
-            media_type="text/event-stream",
-        )
-
-    event_queue: asyncio.Queue = asyncio.Queue()
-
-    # Prepare messages
-    messages_dicts = []
-    content = ""
-
-    if request.messages:
-        messages_dicts = [
-            {"role": m.role, "content": m.content} for m in request.messages
-        ]
-        # content is extracted in workflow from messages, but we pass it for logging/legacy
-        if messages_dicts:
-            # Find last user message
-            for m in reversed(messages_dicts):
-                if m["role"] == "user":
-                    content = m["content"]
-                    break
-    elif request.content:
-        content = request.content
-        messages_dicts = [{"role": "user", "content": content}]
-
-    async def event_generator():
-        # Start the workflow in a background task
-        task = asyncio.create_task(
-            run_workflow_with_streaming(
-                content, request.dataset_name, event_queue, messages=messages_dicts
+        # Send final answer if available
+        final_response = result.get("final_response", "")
+        if final_response:
+            await event_queue.put(
+                f'data: {json.dumps({"type": "answer", "content": final_response, "is_final": True})}\n\n'
             )
+
+        # Send done message with metadata
+        done_msg = {
+            "type": "done",
+            "metadata": {
+                "total_tool_calls": result.get("total_tool_calls", 0),
+                "failed_tool_calls": result.get("total_failed_tool_calls", 0),
+                "browsed_links": result.get("browsed_links", []),
+                "searched_links": result.get("searched_links", []),
+                "snippets": callback.snippets,
+            },
+        }
+        await event_queue.put(f"data: {json.dumps(done_msg)}\n\n")
+
+        # Signal completion
+        await event_queue.put(None)
+
+    @app.post("/chat/stream")
+    async def chat_stream(request: ChatRequest):
+        """
+        SSE endpoint for chat interactions.
+
+        Client sends: { "content": "...", "dataset_name": "..." }
+        Server streams: SSE events for thinking, tool_call, answer, done, error
+        """
+        if app.state.workflow is None:
+            return StreamingResponse(
+                iter(
+                    [
+                        f'data: {json.dumps({"type": "error", "message": "Workflow not initialized"})}\n\n'
+                    ]
+                ),
+                media_type="text/event-stream",
+            )
+
+        event_queue: asyncio.Queue = asyncio.Queue()
+
+        # Prepare messages
+        messages_dicts = []
+        content = ""
+
+        if request.messages:
+            messages_dicts = [
+                {"role": m.role, "content": m.content} for m in request.messages
+            ]
+            # content is extracted in workflow from messages, but we pass it for logging/legacy
+            if messages_dicts:
+                # Find last user message
+                for m in reversed(messages_dicts):
+                    if m["role"] == "user":
+                        content = m["content"]
+                        break
+        elif request.content:
+            content = request.content
+            messages_dicts = [{"role": "user", "content": content}]
+
+        async def event_generator():
+            # Start the workflow in a background task
+            task = asyncio.create_task(
+                run_workflow_with_streaming(
+                    content, request.dataset_name, event_queue, messages=messages_dicts
+                )
+            )
+
+            try:
+                while True:
+                    event = await event_queue.get()
+                    if event is None:  # Completion signal
+                        break
+                    yield event
+            except asyncio.CancelledError:
+                task.cancel()
+                raise
+            except Exception as e:
+                yield f'data: {json.dumps({"type": "error", "message": str(e)})}\n\n'
+
+        return StreamingResponse(
+            event_generator(),
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache",
+                "Connection": "keep-alive",
+                "X-Accel-Buffering": "no",  # Disable nginx buffering
+            },
         )
 
-        try:
-            while True:
-                event = await event_queue.get()
-                if event is None:  # Completion signal
-                    break
-                yield event
-        except asyncio.CancelledError:
-            task.cancel()
-            raise
-        except Exception as e:
-            yield f'data: {json.dumps({"type": "error", "message": str(e)})}\n\n'
+    @app.get("/health")
+    async def health_check():
+        """Health check endpoint."""
+        return {"status": "ok", "workflow_loaded": app.state.workflow is not None}
 
-    return StreamingResponse(
-        event_generator(),
-        media_type="text/event-stream",
-        headers={
-            "Cache-Control": "no-cache",
-            "Connection": "keep-alive",
-            "X-Accel-Buffering": "no",  # Disable nginx buffering
-        },
-    )
-
-
-@app.get("/health")
-async def health_check():
-    """Health check endpoint."""
-    return {"status": "ok", "workflow_loaded": workflow is not None}
+    return app
