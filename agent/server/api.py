@@ -39,8 +39,14 @@ def set_workflow(wf: AutoReasonSearchWorkflow):
     workflow = wf
 
 
-class ChatRequest(BaseModel):
+class Message(BaseModel):
+    role: str
     content: str
+
+
+class ChatRequest(BaseModel):
+    content: Optional[str] = None
+    messages: Optional[List[Message]] = None
     dataset_name: str = "long_form"
 
 
@@ -219,7 +225,10 @@ class SSECallback:
 
 
 async def run_workflow_with_streaming(
-    content: str, dataset_name: str, event_queue: asyncio.Queue
+    content: str,
+    dataset_name: str,
+    event_queue: asyncio.Queue,
+    messages: Optional[List[Dict[str, str]]] = None,
 ):
     """Run the workflow and stream events via the queue."""
     callback = SSECallback(event_queue)
@@ -230,6 +239,7 @@ async def run_workflow_with_streaming(
     result = await workflow(
         problem=content,
         dataset_name=dataset_name,
+        messages=messages,
         verbose=False,
         step_callback=callback,
     )
@@ -278,11 +288,30 @@ async def chat_stream(request: ChatRequest):
 
     event_queue: asyncio.Queue = asyncio.Queue()
 
+    # Prepare messages
+    messages_dicts = []
+    content = ""
+
+    if request.messages:
+        messages_dicts = [
+            {"role": m.role, "content": m.content} for m in request.messages
+        ]
+        # content is extracted in workflow from messages, but we pass it for logging/legacy
+        if messages_dicts:
+            # Find last user message
+            for m in reversed(messages_dicts):
+                if m["role"] == "user":
+                    content = m["content"]
+                    break
+    elif request.content:
+        content = request.content
+        messages_dicts = [{"role": "user", "content": content}]
+
     async def event_generator():
         # Start the workflow in a background task
         task = asyncio.create_task(
             run_workflow_with_streaming(
-                request.content, request.dataset_name, event_queue
+                content, request.dataset_name, event_queue, messages=messages_dicts
             )
         )
 

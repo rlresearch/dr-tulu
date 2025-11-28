@@ -63,7 +63,7 @@ import {
   PageHeaderHeading,
 } from "@/app/components/page-header";
 import { cn } from "@/lib/utils";
-import { useChat, TraceItem, ToolCallData, DocumentData } from "@/lib/sse";
+import { useChat, TraceItem, ToolCallData, DocumentData, Message as SSEMessage } from "@/lib/sse";
 
 const TITLE =
   "DR Tulu: Reinforcement Learning with Evolving Rubrics for Deep Research";
@@ -1317,7 +1317,6 @@ const LiveChatInterface = ({
   onPanelToggle: () => void;
 }) => {
   const [input, setInput] = useState("");
-  const [currentQuery, setCurrentQuery] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -1330,6 +1329,7 @@ const LiveChatInterface = ({
     thinkingContent,
     answerContent,
     traceItems,
+    messages,
     metadata,
     sendQuery,
     cancel,
@@ -1348,7 +1348,7 @@ const LiveChatInterface = ({
 
   // Auto-scroll when content updates
   useEffect(() => {
-    if (scrollAreaRef.current && (isLoading || answerContent)) {
+    if (scrollAreaRef.current && (isLoading || answerContent || messages.length > 0)) {
       const scrollContainer = scrollAreaRef.current.querySelector(
         "[data-radix-scroll-area-viewport]"
       );
@@ -1356,14 +1356,13 @@ const LiveChatInterface = ({
         scrollContainer.scrollTop = scrollContainer.scrollHeight;
       }
     }
-  }, [answerContent, isLoading]);
+  }, [answerContent, isLoading, messages]);
 
   const handleSubmit = useCallback(
     (e: React.FormEvent) => {
       e.preventDefault();
       if (!input.trim() || isLoading) return;
 
-      setCurrentQuery(input.trim());
       sendQuery(input.trim());
       setInput("");
     },
@@ -1377,9 +1376,18 @@ const LiveChatInterface = ({
     }
   };
 
+  // Combine all traces (history + current)
+  const allTraceItems = [
+    ...messages.flatMap((m) => m.traceItems || []),
+    ...traceItems,
+  ];
+
   // Extract documents from tool calls for side panel
-  const allDocuments: Document[] = traceItems
-    .filter((item): item is { type: "tool_call"; data: ToolCallData } => item.type === "tool_call")
+  const allDocuments: Document[] = allTraceItems
+    .filter(
+      (item): item is { type: "tool_call"; data: ToolCallData } =>
+        item.type === "tool_call"
+    )
     .flatMap((item) =>
       (item.data.documents || []).map((doc) => ({
         id: doc.id,
@@ -1411,10 +1419,12 @@ const LiveChatInterface = ({
   });
 
   // Count tool calls
-  const toolCallCount = traceItems.filter((item) => item.type === "tool_call").length;
+  const toolCallCount = allTraceItems.filter(
+    (item) => item.type === "tool_call"
+  ).length;
 
   // Check if we have content to show
-  const hasContent = currentQuery || isLoading || answerContent;
+  const hasContent = messages.length > 0 || isLoading || answerContent;
 
   return (
     <ResizablePanelGroup direction="horizontal" className="h-[600px]">
@@ -1428,7 +1438,10 @@ const LiveChatInterface = ({
                     {isConnected ? (
                       <>
                         <Wifi className="h-8 w-8 mx-auto mb-2 text-green-500" />
-                        <p>Connected to server. Ask a question to start researching!</p>
+                        <p>
+                          Connected to server. Ask a question to start
+                          researching!
+                        </p>
                       </>
                     ) : (
                       <>
@@ -1440,23 +1453,56 @@ const LiveChatInterface = ({
                 </div>
               ) : (
                 <>
-                  {/* User Message */}
-                  {currentQuery && (
-                    <div className="flex gap-3 justify-end">
+                  {/* Message History */}
+                  {messages.map((msg, index) => (
+                    <div
+                      key={index}
+                      className={cn(
+                        "flex gap-3",
+                        msg.role === "user" ? "justify-end" : "justify-start"
+                      )}
+                    >
+                      {msg.role === "assistant" && (
+                        <Avatar className="h-8 w-8">
+                          <AvatarImage
+                            src={`${BASE_PATH}/images/logo.png`}
+                            alt="DR Tulu"
+                          />
+                          <AvatarFallback className="bg-primary text-primary-foreground">
+                            DT
+                          </AvatarFallback>
+                        </Avatar>
+                      )}
                       <div className="flex flex-col gap-2 max-w-[80%]">
-                        <div className="rounded-lg px-4 py-3 bg-primary text-primary-foreground">
+                        {msg.role === "assistant" && (
+                          <i className="text-xs text-muted-foreground">
+                            Answer based on cited docs in the sidebar
+                          </i>
+                        )}
+                        <div
+                          className={cn(
+                            "rounded-lg px-4 py-3",
+                            msg.role === "user"
+                              ? "bg-primary text-primary-foreground"
+                              : "bg-muted"
+                          )}
+                        >
                           <div className="text-sm whitespace-pre-wrap leading-relaxed">
-                            {currentQuery}
+                            {msg.role === "assistant"
+                              ? parseCitationsWithTooltips(msg.content, sources)
+                              : msg.content}
                           </div>
                         </div>
                       </div>
-                      <Avatar className="h-8 w-8">
-                        <AvatarFallback>U</AvatarFallback>
-                      </Avatar>
+                      {msg.role === "user" && (
+                        <Avatar className="h-8 w-8">
+                          <AvatarFallback>U</AvatarFallback>
+                        </Avatar>
+                      )}
                     </div>
-                  )}
+                  ))}
 
-                  {/* Assistant Response */}
+                  {/* Current Assistant Response (Streaming) */}
                   {(isLoading || answerContent) && (
                     <div className="flex gap-3 justify-start">
                       <Avatar className="h-8 w-8">
@@ -1477,7 +1523,10 @@ const LiveChatInterface = ({
                             <div className="rounded-lg px-4 py-3 bg-muted">
                               <div className="text-sm whitespace-pre-wrap leading-relaxed">
                                 {sources.length > 0
-                                  ? parseCitationsWithTooltips(answerContent, sources)
+                                  ? parseCitationsWithTooltips(
+                                      answerContent,
+                                      sources
+                                    )
                                   : answerContent}
                               </div>
                             </div>
@@ -1527,7 +1576,10 @@ const LiveChatInterface = ({
             </div>
           </ScrollArea>
 
-          <form onSubmit={handleSubmit} className="p-4 pl-8 border-t bg-muted/10">
+          <form
+            onSubmit={handleSubmit}
+            className="p-4 pl-8 border-t bg-muted/10"
+          >
             <div className="relative">
               <Textarea
                 ref={textareaRef}
@@ -1628,14 +1680,18 @@ const LiveChatInterface = ({
                   </div>
                   <ScrollArea className="h-[calc(100%-3rem)] p-4">
                     <div className="space-y-3">
-                      {traceItems.length === 0 && isLoading ? (
+                      {allTraceItems.length === 0 && isLoading ? (
                         <div className="flex items-center gap-2 text-muted-foreground text-sm">
                           <Loader2 className="h-4 w-4 animate-spin" />
                           <span>Starting research...</span>
                         </div>
                       ) : (
-                        traceItems.map((item, index) => (
-                          <LiveTraceItem key={index} item={item} index={index} />
+                        allTraceItems.map((item, index) => (
+                          <LiveTraceItem
+                            key={index}
+                            item={item}
+                            index={index}
+                          />
                         ))
                       )}
                     </div>
@@ -1643,7 +1699,10 @@ const LiveChatInterface = ({
                 </TabsContent>
 
                 {/* Documents Tab */}
-                <TabsContent value="documents" className="flex-1 overflow-hidden mt-0">
+                <TabsContent
+                  value="documents"
+                  className="flex-1 overflow-hidden mt-0"
+                >
                   <div className="p-4 border-b bg-background">
                     <div className="relative flex items-center">
                       <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -1658,8 +1717,9 @@ const LiveChatInterface = ({
                       <div className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground pointer-events-none">
                         {searchQuery ? (
                           <span>
-                            Showing {filteredDocuments.length} of {allDocuments.length}{" "}
-                            result{allDocuments.length !== 1 ? "s" : ""}
+                            Showing {filteredDocuments.length} of{" "}
+                            {allDocuments.length} result
+                            {allDocuments.length !== 1 ? "s" : ""}
                           </span>
                         ) : (
                           <span>{allDocuments.length} retrieved</span>
@@ -1703,7 +1763,9 @@ const LiveChatInterface = ({
                         ))
                       ) : allDocuments.length === 0 ? (
                         <div className="text-center text-sm text-muted-foreground py-8">
-                          {isLoading ? "Searching for documents..." : "No documents retrieved yet"}
+                          {isLoading
+                            ? "Searching for documents..."
+                            : "No documents retrieved yet"}
                         </div>
                       ) : (
                         <div className="text-center text-sm text-muted-foreground py-8">
