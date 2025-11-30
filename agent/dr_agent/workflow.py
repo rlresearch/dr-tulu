@@ -1211,6 +1211,11 @@ class BaseWorkflow(ABC):
                 "--config-overrides",
                 help="Override configuration parameters in format 'param1=value1,param2=value2'",
             ),
+            password: Optional[str] = typer.Option(
+                None,
+                "--password",
+                help="Optional password for HTTP Basic Authentication. If provided, users must authenticate to access the server.",
+            ),
             verbose: bool = typer.Option(
                 False,
                 "--verbose",
@@ -1265,10 +1270,12 @@ class BaseWorkflow(ABC):
             cls.__logger__.info("Workflow initialized successfully")
 
             # Create FastAPI app
-            fastapi_app = create_app(workflow, ui_mode=ui_mode)
+            fastapi_app = create_app(workflow, ui_mode=ui_mode, password=password)
 
             # Start server
             cls.__logger__.info(f"Starting server at http://{host}:{port}")
+            if password:
+                cls.__logger__.warning("🔒 Password authentication is enabled")
             cls.__logger__.info(f"SSE endpoint: http://{host}:{port}/chat/stream")
             cls.__logger__.info(f"Health check: http://{host}:{port}/health")
 
