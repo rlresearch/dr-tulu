@@ -8,11 +8,17 @@ to the frontend, including thinking text, tool calls, and final answers.
 import asyncio
 import json
 import re
+import secrets
 from typing import Any, Dict, List, Optional
 
-from fastapi import FastAPI
+from fastapi import Cookie, Depends, FastAPI, Form, HTTPException, Request, status
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
+from fastapi.responses import (
+    HTMLResponse,
+    RedirectResponse,
+    Response,
+    StreamingResponse,
+)
 from pydantic import BaseModel
 
 from ..tool_interface.data_types import DocumentToolOutput, ToolOutput
@@ -208,6 +214,7 @@ def create_app(
     workflow_instance: BaseWorkflow,
     ui_mode: str = "auto",
     dev_url: Optional[str] = None,
+    password: Optional[str] = None,
 ) -> FastAPI:
     """
     Create a FastAPI app configured to serve the given workflow.
@@ -221,11 +228,22 @@ def create_app(
             - "proxy": Show redirect to dev server (requires dev_url)
         dev_url: URL of the development server (e.g., "http://localhost:3000")
                  Only used when ui_mode is "proxy"
+        password: Optional password for HTTP Basic Authentication. If provided,
+                 all endpoints (except /health) will require authentication.
 
     Returns:
         Configured FastAPI application
     """
     app = FastAPI(title="DR-Agent Chat API")
+
+    # Store workflow in app state
+    app.state.workflow = workflow_instance
+    app.state.ui_mode = ui_mode
+    app.state.password = password
+
+    # Generate a secret session token for authenticated sessions
+    SESSION_TOKEN = secrets.token_urlsafe(32) if password else None
+    app.state.session_token = SESSION_TOKEN
 
     # Enable CORS for local development
     app.add_middleware(
@@ -236,9 +254,202 @@ def create_app(
         allow_headers=["*"],
     )
 
-    # Store workflow in app state
-    app.state.workflow = workflow_instance
-    app.state.ui_mode = ui_mode
+    # Add authentication middleware if password is set
+    if password:
+
+        @app.middleware("http")
+        async def auth_middleware(request: Request, call_next):
+            """Middleware to check authentication for protected routes."""
+            # Allow access to auth endpoints and health check
+            if request.url.path.startswith("/auth/") or request.url.path == "/health":
+                return await call_next(request)
+
+            # Check for valid auth token
+            auth_token = request.cookies.get("auth_token")
+            if not auth_token or auth_token != app.state.session_token:
+                # Redirect to login page for UI routes
+                if request.url.path == "/" or request.url.path.startswith("/assets"):
+                    return RedirectResponse(url="/auth/login", status_code=302)
+                # Return 401 for API routes
+                return Response(
+                    status_code=401,
+                    content=json.dumps({"detail": "Authentication required"}),
+                    media_type="application/json",
+                )
+
+            return await call_next(request)
+
+    # Setup authentication if password is provided
+    def verify_auth(auth_token: Optional[str] = Cookie(None, alias="auth_token")):
+        """Verify authentication token from cookie."""
+        if not password:
+            return True
+
+        if not auth_token or auth_token != SESSION_TOKEN:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Authentication required",
+            )
+        return True
+
+    # Login page HTML
+    LOGIN_HTML = """
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <title>Login - DR-Agent</title>
+        <style>
+            body {
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+                display: flex;
+                justify-content: center;
+                align-items: center;
+                min-height: 100vh;
+                margin: 0;
+                background: #ffffff;
+            }
+            .login-container {
+                width: 100%;
+                max-width: 360px;
+                padding: 2rem;
+            }
+            h1 {
+                margin: 0 0 2rem 0;
+                color: #333;
+                font-size: 1.5rem;
+                text-align: center;
+                font-weight: 600;
+            }
+            .form-group {
+                margin-bottom: 1rem;
+            }
+            label {
+                display: block;
+                margin-bottom: 0.5rem;
+                color: #555;
+                font-weight: 500;
+                font-size: 0.9rem;
+            }
+            input[type="password"] {
+                width: 100%;
+                padding: 0.75rem;
+                border: 1px solid #ddd;
+                border-radius: 6px;
+                font-size: 1rem;
+                transition: border-color 0.2s;
+                box-sizing: border-box;
+            }
+            input[type="password"]:focus {
+                outline: none;
+                border-color: #333;
+            }
+            button {
+                width: 100%;
+                padding: 0.75rem;
+                background: #333;
+                color: white;
+                border: none;
+                border-radius: 6px;
+                font-size: 1rem;
+                font-weight: 500;
+                cursor: pointer;
+                transition: background 0.2s;
+            }
+            button:hover {
+                background: #555;
+            }
+            button:active {
+                background: #222;
+            }
+            .error {
+                color: #dc2626;
+                font-size: 0.875rem;
+                margin-top: 0.5rem;
+                display: none;
+            }
+            .error.show {
+                display: block;
+            }
+        </style>
+    </head>
+    <body>
+        <div class="login-container">
+            <h1>DR-Agent</h1>
+            <form id="loginForm">
+                <div class="form-group">
+                    <label for="password">Password</label>
+                    <input type="password" id="password" name="password" required autocomplete="current-password">
+                </div>
+                <button type="submit">Login</button>
+                <div class="error" id="error">Invalid password. Please try again.</div>
+            </form>
+        </div>
+        <script>
+            document.getElementById('loginForm').addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const password = document.getElementById('password').value;
+                const errorDiv = document.getElementById('error');
+                
+                const response = await fetch('/auth/login', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                    },
+                    body: new URLSearchParams({ password }),
+                });
+                
+                if (response.ok) {
+                    window.location.href = '/';
+                } else {
+                    errorDiv.classList.add('show');
+                    document.getElementById('password').value = '';
+                    document.getElementById('password').focus();
+                }
+            });
+        </script>
+    </body>
+    </html>
+    """
+
+    @app.post("/auth/login")
+    async def login(password_input: str = Form(..., alias="password")):
+        """Handle login and set auth cookie."""
+        if not password:
+            return Response(status_code=400, content="Authentication not enabled")
+
+        is_correct = secrets.compare_digest(
+            password_input.encode("utf8"), password.encode("utf8")
+        )
+
+        if is_correct:
+            response = Response(status_code=200)
+            response.set_cookie(
+                key="auth_token",
+                value=SESSION_TOKEN,
+                httponly=True,
+                secure=False,  # Set to True in production with HTTPS
+                samesite="lax",
+                max_age=86400,  # 24 hours
+            )
+            return response
+        else:
+            raise HTTPException(status_code=401, detail="Invalid password")
+
+    @app.get("/auth/logout")
+    async def logout():
+        """Handle logout and clear auth cookie."""
+        response = RedirectResponse(url="/auth/login", status_code=302)
+        response.delete_cookie("auth_token")
+        return response
+
+    @app.get("/auth/login")
+    async def login_page():
+        """Serve login page."""
+        if not password:
+            return RedirectResponse(url="/")
+        return HTMLResponse(content=LOGIN_HTML)
 
     async def run_workflow_with_streaming(
         content: str,
@@ -284,7 +495,7 @@ def create_app(
         await event_queue.put(None)
 
     @app.post("/chat/stream")
-    async def chat_stream(request: ChatRequest):
+    async def chat_stream(request: ChatRequest, _: bool = Depends(verify_auth)):
         """
         SSE endpoint for chat interactions.
 

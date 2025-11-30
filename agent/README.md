@@ -75,6 +75,10 @@ python workflows/auto_search_sft.py serve --port 8080
 
 # In UI dev mode
 python workflows/auto_search_sft.py serve --port 8080 --ui-mode proxy
+
+# With password protection (optional)
+# Users will see a login page before accessing the UI
+python workflows/auto_search_sft.py serve --port 8080 --password "your-secure-password"
 ```
 
 
