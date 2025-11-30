@@ -22,7 +22,7 @@ export MCP_TRANSPORT_PORT=8003
 
 # setup a ray cluster, with 2 nodes and 8 GPUs per node.
 # in ai2, we use the following script:
-source configs/beaker_configs/ray_node_setup.sh
+# source configs/beaker_configs/ray_node_setup.sh
 
 
 uv run --extra compile python open_instruct/grpo_fast.py \
@@ -50,7 +50,7 @@ uv run --extra compile python open_instruct/grpo_fast.py \
         --max_prompt_token_length 2048 \
         --response_length 16384 \
         --pack_length 18500 \
-        --model_name_or_path ${model_path} \
+        --model_name_or_path ${model_name} \
         --non_stop_penalty False \
         --non_stop_penalty_value 0.0 \
         --temperature 1.0 \
@@ -77,7 +77,7 @@ uv run --extra compile python open_instruct/grpo_fast.py \
         --mcp_parser_name v20250824 \
         --system_prompt_file open_instruct/search_utils/system_prompts/unified_tool_calling_v20250907.yaml  \
         --mcp_tool_names 'snippet_search,google_search,browse_webpage' \
-        --mcp_server_command "'python -m dr_agent.mcp_backend.main --transport http --port 8003 --host 0.0.0.0 --path /mcp'"
+        --mcp_server_command "uv run python -m dr_agent.mcp_backend.main --transport http --port 8003 --host 0.0.0.0 --path /mcp"
 
 # For people at Ai2, here is the exact command we used:
 #############

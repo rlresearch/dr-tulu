@@ -1949,9 +1949,9 @@ def main(args: Args, tc: TokenizerConfig, model_config: ModelConfig, reward_fn: 
     tool_max_conc = args.tool_max_concurrency
 
     # one additional thing: set mcp host if we are in a beaker job
-    if os.environ.get("BEAKER_LEADER_REPLICA_IP") is not None:
-        args.mcp_host = os.environ.get("BEAKER_LEADER_REPLICA_IP")
-        print(f"🚨 Setting MCP host to {args.mcp_host} based on BEAKER_LEADER_REPLICA_IP")
+    if os.environ.get("BEAKER_LEADER_REPLICA_IP") is not None or os.environ.get("MCP_TRANSPORT_HOST") is not None:
+        args.mcp_host = os.environ.get("BEAKER_LEADER_REPLICA_IP") or os.environ.get("BEAKER_LEADER_REPLICA_HOSTNAME")
+        print(f"🚨 Setting MCP host to {args.mcp_host} based on BEAKER_LEADER_REPLICA_IP or MCP_TRANSPORT_HOST")
         # minor fix.
         if "127.0.0.1" in args.mcp_host:
             args.mcp_host = "0.0.0.0"
