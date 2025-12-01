@@ -1,0 +1,6 @@
+# Ignore all contents of the static folder (Next.js build output)
+dr_agent_ui/static/*
+
+# Keep the static folder itself
+!dr_agent_ui/static/.gitkeep
+

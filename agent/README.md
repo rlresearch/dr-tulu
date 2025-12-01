@@ -63,6 +63,23 @@ Note you will need to get these API keys from the respective services.
 
 ## Interactive Chat
 
+### In Live Interface 
+
+```bash 
+# Install additional dependencies
+uv pip install ".[ui]" 
+
+# Launch the interactive interface with the workflow
+python workflows/auto_search_sft.py serve --port 8080
+# (this assumes you also launch other needed MCP and model server)
+
+# In UI dev mode
+python workflows/auto_search_sft.py serve --port 8080 --ui-mode proxy
+```
+
+
+### In CLI 
+
 We provide an interactive cli demo for the auto_search workflow.
 Requires 1-2 GPUs. We recommend running with `uv`, which should install everything you need and then launch the tool, but set your API keys first:
 

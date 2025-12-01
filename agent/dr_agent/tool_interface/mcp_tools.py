@@ -583,6 +583,9 @@ class MCPSearchTool(MCPMixin, BaseTool, ABC):
             raw_output=raw_output,
             documents=documents,
             query=tool_call_info.content,  # Save the original query
+            input_params=(
+                tool_call_info.parameters if tool_call_info.parameters else None
+            ),
         )
 
     def _format_output(self, output: Union[ToolOutput, DocumentToolOutput]) -> str:

@@ -515,7 +515,14 @@ class LLMToolClient:
 
             # Call on_step_callback with the new generation
             if on_step_callback:
-                if asyncio.iscoroutinefunction(on_step_callback):
+                # Check if callback is async (either a coroutine function or has async __call__)
+                is_async = asyncio.iscoroutinefunction(on_step_callback) or (
+                    callable(on_step_callback)
+                    and asyncio.iscoroutinefunction(
+                        getattr(on_step_callback, "__call__", None)
+                    )
+                )
+                if is_async:
                     await on_step_callback(response_content, [])
                 else:
                     on_step_callback(response_content, [])
@@ -587,7 +594,13 @@ class LLMToolClient:
 
             # Call on_step_callback with the tool output
             if on_step_callback:
-                if asyncio.iscoroutinefunction(on_step_callback):
+                is_async = asyncio.iscoroutinefunction(on_step_callback) or (
+                    callable(on_step_callback)
+                    and asyncio.iscoroutinefunction(
+                        getattr(on_step_callback, "__call__", None)
+                    )
+                )
+                if is_async:
                     await on_step_callback("", [tool_output])
                 else:
                     on_step_callback("", [tool_output])
@@ -701,7 +714,13 @@ class LLMToolClient:
 
             # Call on_step_callback with the new generation
             if on_step_callback:
-                if asyncio.iscoroutinefunction(on_step_callback):
+                is_async = asyncio.iscoroutinefunction(on_step_callback) or (
+                    callable(on_step_callback)
+                    and asyncio.iscoroutinefunction(
+                        getattr(on_step_callback, "__call__", None)
+                    )
+                )
+                if is_async:
                     await on_step_callback(response, [])
                 else:
                     on_step_callback(response, [])
@@ -768,7 +787,13 @@ class LLMToolClient:
 
                 # Call on_step_callback with the tool output
                 if on_step_callback:
-                    if asyncio.iscoroutinefunction(on_step_callback):
+                    is_async = asyncio.iscoroutinefunction(on_step_callback) or (
+                        callable(on_step_callback)
+                        and asyncio.iscoroutinefunction(
+                            getattr(on_step_callback, "__call__", None)
+                        )
+                    )
+                    if is_async:
                         await on_step_callback("", [tool_output])
                     else:
                         on_step_callback("", [tool_output])

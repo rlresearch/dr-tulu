@@ -1,0 +1,46 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "dr-agent-ui"
+version = "0.1.0.post1"
+description = "Pre-compiled web interface for DR-Agent workflows"
+authors = [
+    {name = "Shannon Shen", email = "zejiang@gmail.com"},
+    {name = "Rulin Shao", email = "rulins@cs.washington.edu"}
+]
+readme = "README.md"
+license = "Apache-2.0"
+requires-python = ">=3.10"
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Framework :: FastAPI",
+]
+keywords = ["dr-agent", "ui", "web-interface", "chat", "research"]
+
+dependencies = [
+    "fastapi>=0.104.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "build",
+    "twine",
+]
+
+[tool.setuptools]
+packages = ["dr_agent_ui"]
+
+[tool.setuptools.package-data]
+dr_agent_ui = ["static/**/*", "static/**/.*"]
+

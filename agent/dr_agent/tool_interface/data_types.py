@@ -131,3 +131,4 @@ class DocumentToolOutput(ToolOutput):
 
     documents: List[Document] = []
     query: Optional[str] = None  # Original query that generated these documents
+    input_params: Optional[Dict[str, Any]] = None  # Original input parameters

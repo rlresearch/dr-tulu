@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "dr-agent"
-version = "0.1.1"
+version = "0.1.2.post1"
 description = "dr-agent-lib is an agent library for building deep research agents"
 authors = [
     {name = "Shannon Shen", email = "zejiang@gmail.com"},
@@ -55,6 +55,11 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+ui = [
+    "dr-agent-ui~=0.1.0",
+    "fastapi",
+    "uvicorn[standard]",
+]
 dev = [
     "pytest",
     "pytest-asyncio",

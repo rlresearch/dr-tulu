@@ -370,37 +370,43 @@ class BaseWorkflow(ABC):
         raise NotImplementedError
 
     # ---- generate methods ----
-    def _shard_dataset_for_worker(self, dataset: List[Dict[str, Any]], **kwargs) -> List[Dict[str, Any]]:
+    def _shard_dataset_for_worker(
+        self, dataset: List[Dict[str, Any]], **kwargs
+    ) -> List[Dict[str, Any]]:
         """
         Shard dataset for multi-worker processing.
-        
+
         Args:
             dataset: Full dataset to shard
             **kwargs: Should contain num_total_workers and worker_index if sharding is needed
-            
+
         Returns:
             Sharded dataset for this worker
         """
-        num_total_workers = kwargs.get('num_total_workers')
-        worker_index = kwargs.get('worker_index')
-        
+        num_total_workers = kwargs.get("num_total_workers")
+        worker_index = kwargs.get("worker_index")
+
         if num_total_workers is not None and worker_index is not None:
             # Shard the dataset for this worker
             total_examples = len(dataset)
             examples_per_worker = total_examples // num_total_workers
             remainder = total_examples % num_total_workers
-            
+
             # Calculate start and end indices for this worker
-            start_idx = worker_index * examples_per_worker + min(worker_index, remainder)
-            end_idx = start_idx + examples_per_worker + (1 if worker_index < remainder else 0)
-            
+            start_idx = worker_index * examples_per_worker + min(
+                worker_index, remainder
+            )
+            end_idx = (
+                start_idx + examples_per_worker + (1 if worker_index < remainder else 0)
+            )
+
             dataset = dataset[start_idx:end_idx]
-            
+
             self.logger.warning(
                 f"Worker {worker_index}/{num_total_workers}: Processing examples {start_idx}-{end_idx-1} "
                 f"({len(dataset)} examples out of {total_examples} total)"
             )
-        
+
         return dataset
 
     async def generate_dataset(
@@ -451,8 +457,12 @@ class BaseWorkflow(ABC):
         )
 
         # Filter out worker-specific parameters before passing to workflow
-        workflow_kwargs = {k: v for k, v in kwargs.items() if k not in ['num_total_workers', 'worker_index']}
-        
+        workflow_kwargs = {
+            k: v
+            for k, v in kwargs.items()
+            if k not in ["num_total_workers", "worker_index"]
+        }
+
         # Process in parallel using the workflow's map function
         results = await self.map(
             dataset_to_process,
@@ -586,8 +596,12 @@ class BaseWorkflow(ABC):
 
             try:
                 # Filter out worker-specific parameters before passing to workflow
-                workflow_kwargs = {k: v for k, v in kwargs.items() if k not in ['num_total_workers', 'worker_index']}
-                
+                workflow_kwargs = {
+                    k: v
+                    for k, v in kwargs.items()
+                    if k not in ["num_total_workers", "worker_index"]
+                }
+
                 # Process batch
                 batch_results = await self.map(
                     batch_to_process,
@@ -775,13 +789,17 @@ class BaseWorkflow(ABC):
 
             # Validate worker parameters
             if (num_total_workers is None) != (worker_index is None):
-                raise ValueError("Both num_total_workers and worker_index must be provided together or not at all")
-            
+                raise ValueError(
+                    "Both num_total_workers and worker_index must be provided together or not at all"
+                )
+
             if num_total_workers is not None:
                 if num_total_workers <= 0:
                     raise ValueError("num_total_workers must be positive")
                 if worker_index < 0 or worker_index >= num_total_workers:
-                    raise ValueError(f"worker_index must be between 0 and {num_total_workers - 1}")
+                    raise ValueError(
+                        f"worker_index must be between 0 and {num_total_workers - 1}"
+                    )
 
             dataset_config = {
                 "name": dataset_name,
@@ -802,11 +820,15 @@ class BaseWorkflow(ABC):
                 # Create worker-specific output file path
                 if output_file:
                     from pathlib import Path
+
                     output_path = Path(output_file)
-                    worker_output_file = str(output_path.parent / f"{output_path.stem}_worker_{worker_index}{output_path.suffix}")
+                    worker_output_file = str(
+                        output_path.parent
+                        / f"{output_path.stem}_worker_{worker_index}{output_path.suffix}"
+                    )
                 else:
                     worker_output_file = None
-                
+
                 # Pass worker parameters to the dataset generation
                 if use_cache:
                     results = asyncio.get_event_loop().run_until_complete(
@@ -831,7 +853,7 @@ class BaseWorkflow(ABC):
                             worker_index=worker_index,
                         )
                     )
-                
+
                 # Try to merge results if all workers are done
                 if output_file:
                     workflow._try_merge_worker_results(output_file, num_total_workers)
@@ -860,7 +882,9 @@ class BaseWorkflow(ABC):
             typer.echo(f"Generated {len(results)} responses")
             if output_file:
                 if num_total_workers is not None:
-                    typer.echo(f"Worker {worker_index} results saved to worker-specific file")
+                    typer.echo(
+                        f"Worker {worker_index} results saved to worker-specific file"
+                    )
                     # Check if final merged file exists
                     if os.path.exists(output_file):
                         typer.echo(f"Final merged results available at {output_file}")
@@ -1159,41 +1183,137 @@ class BaseWorkflow(ABC):
             typer.echo(f"Generated {len(results)} responses for iteration {iteration}")
             typer.echo(f"Results saved to {current_output_file}")
 
+        @app.command()
+        def serve(
+            port: int = typer.Option(
+                8080,
+                "--port",
+                "-p",
+                help="Port to run the server on",
+            ),
+            host: str = typer.Option(
+                "0.0.0.0",
+                "--host",
+                help="Host to bind the server to",
+            ),
+            ui_mode: str = typer.Option(
+                "auto",
+                "--ui-mode",
+                help="UI mode to use",
+            ),
+            config_file: Optional[str] = typer.Option(
+                None,
+                "--config",
+                help="Configuration file path for the workflow",
+            ),
+            config_overrides: Optional[str] = typer.Option(
+                None,
+                "--config-overrides",
+                help="Override configuration parameters in format 'param1=value1,param2=value2'",
+            ),
+            verbose: bool = typer.Option(
+                False,
+                "--verbose",
+                "-v",
+                help="Verbose output",
+            ),
+        ):
+            """Start a live chat server for the workflow."""
+            # Import web API dependencies here to avoid loading them when not needed
+            try:
+                import uvicorn
+                from dr_agent.web_api import create_app
+            except ImportError as e:
+                cls.__logger__.error(
+                    f"Failed to import server dependencies: {e}. "
+                    "Make sure fastapi and uvicorn are installed."
+                )
+                raise
+
+            # Use workflow's default config if not specified
+            if config_file is None:
+                config_file = cls._default_configuration_path
+                cls.__logger__.warning(
+                    f"Using default configuration file: {config_file}"
+                )
+
+            # Parse config overrides
+            parsed_overrides = _parse_overrides(config_overrides)
+
+            # Set reasonable defaults for interactive use
+            if "browse_timeout" not in parsed_overrides:
+                parsed_overrides["browse_timeout"] = 10
+            if "prompt_version" not in parsed_overrides:
+                parsed_overrides["prompt_version"] = "cli"
+
+            if parsed_overrides:
+                cls.__logger__.warning(
+                    f"Overriding the config with: {parsed_overrides}"
+                )
+
+            if not verbose:
+                # Disable verbose logging for cleaner server output
+                logging.getLogger("mcp.client.streamable_http").setLevel(
+                    logging.WARNING
+                )
+                logging.getLogger("LiteLLM").setLevel(logging.WARNING)
+                litellm.turn_off_message_logging = True
+
+            # Initialize workflow
+            cls.__logger__.info("Initializing workflow...")
+            workflow = cls(configuration=config_file, **parsed_overrides)
+            cls.__logger__.info("Workflow initialized successfully")
+
+            # Create FastAPI app
+            fastapi_app = create_app(workflow, ui_mode=ui_mode)
+
+            # Start server
+            cls.__logger__.info(f"Starting server at http://{host}:{port}")
+            cls.__logger__.info(f"SSE endpoint: http://{host}:{port}/chat/stream")
+            cls.__logger__.info(f"Health check: http://{host}:{port}/health")
+
+            uvicorn.run(fastapi_app, host=host, port=port)
+
         return app()
 
-    def _try_merge_worker_results(self, final_output_file: str, num_total_workers: int) -> bool:
+    def _try_merge_worker_results(
+        self, final_output_file: str, num_total_workers: int
+    ) -> bool:
         """
         Try to merge worker results into a final file if all workers are complete.
-        
+
         Args:
             final_output_file: Path to the final merged output file
             num_total_workers: Total number of workers expected
-            
+
         Returns:
             True if merge was successful, False otherwise
         """
         import json
         import os
         from pathlib import Path
-        
+
         output_path = Path(final_output_file)
-        
+
         # Check if all worker files exist
         worker_files = []
         for worker_idx in range(num_total_workers):
-            worker_file = str(output_path.parent / f"{output_path.stem}_worker_{worker_idx}{output_path.suffix}")
+            worker_file = str(
+                output_path.parent
+                / f"{output_path.stem}_worker_{worker_idx}{output_path.suffix}"
+            )
             if os.path.exists(worker_file):
                 worker_files.append(worker_file)
             else:
                 # Not all workers are done yet
                 return False
-        
+
         # All worker files exist, merge them
         try:
             all_results = []
             for worker_file in worker_files:
-                with open(worker_file, 'r') as f:
-                    if worker_file.endswith('.jsonl'):
+                with open(worker_file, "r") as f:
+                    if worker_file.endswith(".jsonl"):
                         # JSONL format
                         for line in f:
                             if line.strip():
@@ -1205,21 +1325,23 @@ class BaseWorkflow(ABC):
                             all_results.extend(worker_results)
                         else:
                             all_results.append(worker_results)
-            
+
             # Sort results by example_id for consistency
-            all_results.sort(key=lambda x: x.get('example_id', ''))
-            
+            all_results.sort(key=lambda x: x.get("example_id", ""))
+
             # Write merged results
-            with open(final_output_file, 'w') as f:
-                if final_output_file.endswith('.jsonl'):
+            with open(final_output_file, "w") as f:
+                if final_output_file.endswith(".jsonl"):
                     for result in all_results:
-                        f.write(json.dumps(result) + '\n')
+                        f.write(json.dumps(result) + "\n")
                 else:
                     json.dump(all_results, f, indent=2)
-            
-            self.logger.info(f"Successfully merged {len(all_results)} results from {num_total_workers} workers to {final_output_file}")
+
+            self.logger.info(
+                f"Successfully merged {len(all_results)} results from {num_total_workers} workers to {final_output_file}"
+            )
             return True
-            
+
         except Exception as e:
             self.logger.error(f"Failed to merge worker results: {e}")
             return False

@@ -4,10 +4,9 @@ import json
 import os
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, Optional, Union
+from typing import Any, Dict, List, Optional, Union
 
 import dotenv
-
 from dr_agent.agent_interface import BaseAgent
 from dr_agent.client import DocumentToolOutput, LLMToolClient, ToolOutput
 from dr_agent.shared_prompts import UNIFIED_TOOL_CALLING_STRUCTURED_PROMPTS
@@ -15,10 +14,10 @@ from dr_agent.tool_interface.chained_tool import ChainedTool
 from dr_agent.tool_interface.mcp_tools import (
     BaseTool,
     Crawl4AIBrowseTool,
+    JinaBrowseTool,
     SemanticScholarSnippetSearchTool,
     SerperBrowseTool,
     SerperSearchTool,
-    JinaBrowseTool,
 )
 from dr_agent.workflow import BaseWorkflow, BaseWorkflowConfiguration
 
@@ -76,6 +75,7 @@ class SearchAgent(BaseAgent):
         self,
         question: str,
         dataset_name: Optional[str] = None,
+        history: Optional[List[Dict[str, str]]] = None,
     ) -> str:
 
         PROMPT = UNIFIED_TOOL_CALLING_STRUCTURED_PROMPTS[self.prompt_version]
@@ -113,11 +113,17 @@ class SearchAgent(BaseAgent):
                 print("set additional instructions none")
                 instruction_field_name = None
 
-        return [
+        messages = [
             {
                 "role": "system",
                 "content": system_prompt,
-            },
+            }
+        ]
+
+        if history:
+            messages.extend(history)
+
+        messages.append(
             {
                 "role": "user",
                 "content": (
@@ -127,8 +133,10 @@ class SearchAgent(BaseAgent):
                     if instruction_field_name is not None
                     else question
                 ),
-            },
-        ]
+            }
+        )
+
+        return messages
 
     def postprocess_output(self, result: Dict[str, Any]) -> str:
         output_string = result.generated_text
@@ -242,7 +250,7 @@ class NoBrowseTool(BaseTool):
 
 class AutoReasonSearchWorkflow(BaseWorkflow):
     _default_configuration_path = os.path.join(
-        os.path.dirname(__file__), "auto_search.yaml"
+        os.path.dirname(__file__), "auto_search_sft.yaml"
     )
 
     class Configuration(BaseWorkflowConfiguration):
@@ -253,9 +261,7 @@ class AutoReasonSearchWorkflow(BaseWorkflow):
 
         # Separate generation client (SFT model)
         search_agent_base_url: Optional[str] = None
-        search_agent_model_name: str = (
-            "dr-tulu/DR-Tulu-8B"
-        )
+        search_agent_model_name: str = "dr-tulu/DR-Tulu-8B"
         search_agent_tokenizer_name: str = "Qwen/Qwen3-8B"
         search_agent_api_key: str = "dummy-key"
         search_agent_max_tokens: int = 32000
@@ -452,6 +458,7 @@ class AutoReasonSearchWorkflow(BaseWorkflow):
         self,
         problem: str,
         dataset_name: Optional[str] = None,
+        messages: Optional[List[Dict[str, str]]] = None,
         verbose: bool = True,
         search_callback: Optional[Any] = None,
         step_callback: Optional[Any] = None,
@@ -459,8 +466,24 @@ class AutoReasonSearchWorkflow(BaseWorkflow):
         cfg = self.configuration
         assert cfg is not None
 
-        # import litellm
+        # Extract history and problem from messages if provided
+        history = []
+        if messages:
+            # Find the last user message as the problem
+            last_user_idx = -1
+            for i in range(len(messages) - 1, -1, -1):
+                if messages[i]["role"] == "user":
+                    last_user_idx = i
+                    break
 
+            if last_user_idx != -1:
+                problem = messages[last_user_idx]["content"]
+                history = messages[:last_user_idx]
+            else:
+                # Fallback if no user message found (shouldn't happen ideally)
+                history = messages
+
+        # import litellm
         # litellm._turn_on_debug()
 
         # Set the question for the browse agent
@@ -478,6 +501,7 @@ class AutoReasonSearchWorkflow(BaseWorkflow):
         results = await self.search_agent(
             question=problem,
             dataset_name=dataset_name,
+            history=history,
             max_tokens=cfg.search_agent_max_tokens,
             temperature=cfg.search_agent_temperature,
             max_tool_calls=cfg.search_agent_max_tool_calls,
