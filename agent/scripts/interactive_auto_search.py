@@ -79,6 +79,7 @@ async def chat_loop(
     dataset_name: Optional[str] = None,
     verbose: bool = False,
     show_full_tool_output: bool = False,
+    log_file: Optional[Path] = None,
 ):
     """Run the interactive chat loop using the auto_search workflow."""
     console.print("\n[bold green]Starting interactive auto_search chat session[/bold green]")
@@ -86,6 +87,14 @@ async def chat_loop(
     
     if dataset_name:
         console.print(f"[dim]Using dataset configuration: {dataset_name}[/dim]\n")
+    
+    if log_file:
+        log_base = log_file.with_suffix('')
+        full_log = log_base.with_suffix('.full.json')
+        answer_log = log_base.with_suffix('.answer.json')
+        console.print(f"[dim]Logging to: {log_base.parent}/[/dim]")
+        console.print(f"[dim]  - Full: {full_log.name}[/dim]")
+        console.print(f"[dim]  - Answer: {answer_log.name}[/dim]\n")
 
     import re
 
@@ -105,6 +114,9 @@ async def chat_loop(
     current_segment_text = ""
     active_live = None
     is_answering = False
+    
+    # State for logging
+    interaction_logs = []  # List to store all interactions
     final_answer_text = ""  # Store final answer for bibliography extraction
     thinking_text = ""  # Store final thinking text for display
     
@@ -302,10 +314,26 @@ async def chat_loop(
                     header += f" (id={call_id})"
                 console.print(f"\n[bold magenta]{header}[/bold magenta]")
                 
+                # Prepare tool call log entry
+                tool_call_log_entry = {
+                    "tool_name": tool_name,
+                    "call_id": call_id,
+                    "parameters": {},
+                    "output": None,
+                    "documents": []
+                }
+                
+                # Capture tool call parameters if available
+                if hasattr(tool_call, 'input') and tool_call.input:
+                    tool_call_log_entry["parameters"] = tool_call.input
+                elif hasattr(tool_call, 'arguments') and tool_call.arguments:
+                    tool_call_log_entry["parameters"] = tool_call.arguments
+                
                 # Build snippet info if available
                 snippet_sections = []
                 if isinstance(tool_call, DocumentToolOutput) and tool_call.documents:
                     snippet_blocks = []
+                    retrieved_docs = []
                     for idx, doc in enumerate(tool_call.documents):
                         snippet_id = (
                             f"{tool_call.call_id}-{idx}"
@@ -322,15 +350,23 @@ async def chat_loop(
                         snippet_blocks.append(
                             f"[bold]{idx + 1}. Snippet[/bold] [dim](id={snippet_id})[/dim]\n{snippet_content}"
                         )
+                        # Store document for logging
+                        retrieved_docs.append({
+                            "id": snippet_id,
+                            "content": snippet_content
+                        })
                     if snippet_blocks:
                         snippet_sections.append("\n\n".join(snippet_blocks))
+                    tool_call_log_entry["documents"] = retrieved_docs
 
                 if snippet_sections:
                     content = "[cyan]Retrieved Documents[/cyan]\n" + "\n\n".join(
                         snippet_sections
                     )
+                    tool_call_log_entry["output"] = f"Retrieved {len(tool_call.documents)} documents"
                 else:
                     output = tool_call.output or ""
+                    tool_call_log_entry["output"] = output  # Store full output for log
                     if (
                         not show_full_tool_output
                         and isinstance(output, str)
@@ -346,6 +382,15 @@ async def chat_loop(
                         border_style="green",
                     )
                 )
+                
+                # Add to tool calls log
+                if log_file:
+                    # Clean up empty fields
+                    if not tool_call_log_entry["documents"]:
+                        del tool_call_log_entry["documents"]
+                    if not tool_call_log_entry["parameters"]:
+                        del tool_call_log_entry["parameters"]
+                    tool_calls_log.append(tool_call_log_entry)
                 
             # Reset segment for next block (next iteration)
             current_segment_text = ""
@@ -373,6 +418,14 @@ async def chat_loop(
             
             if not user_input.strip():
                 continue
+            
+            # Initialize log entry for this interaction
+            current_log = {
+                "user_query": user_input,
+                "full_response": [],  # List of display items
+                "final_answer": ""
+            }
+            tool_calls_log = []  # Track tool calls for logging
             
             # Reset state
             last_processed_text_len = 0
@@ -558,6 +611,110 @@ async def chat_loop(
             
             console.print()  # Empty line for spacing
             
+            # Build full response and final answer for logging
+            if log_file:
+                # Capture thinking text
+                if thinking_text:
+                    current_log["full_response"].append({
+                        "type": "thinking",
+                        "content": thinking_text
+                    })
+                
+                # Capture tool calls
+                if tool_calls_log:
+                    current_log["full_response"].append({
+                        "type": "tool_calls",
+                        "content": tool_calls_log
+                    })
+                
+                # Capture final answer
+                if final_answer_text:
+                    # Remove citation tags for clean display
+                    clean_answer = re.sub(r'<cite\s+ids?=["\']?[^"\'>\s]+["\']?[^>]*>', '', final_answer_text)
+                    current_log["full_response"].append({
+                        "type": "answer",
+                        "content": clean_answer
+                    })
+                    
+                    # Build final answer with bibliography
+                    final_answer_with_citations = clean_answer
+                    
+                    # Add bibliography if available
+                    if cited_snippet_ids and snippets_dict:
+                        bibliography_parts = ["\n\n=== Citations ==="]
+                        for original_id in cited_snippet_ids:
+                            if original_id in snippets_dict:
+                                snippet_info = snippets_dict[original_id]
+                                snippet_content = snippet_info["content"]
+                                tool_name = snippet_info["tool_name"]
+                                display_id = id_mapping.get(original_id, original_id)
+                                
+                                # Truncate snippet_content after the URL line
+                                lines = snippet_content.split('\n')
+                                truncated_lines = []
+                                url_line_found = False
+                                for line in lines:
+                                    truncated_lines.append(line)
+                                    if line.strip().upper().startswith('URL:'):
+                                        url_line_found = True
+                                        break
+                                if url_line_found:
+                                    snippet_content = '\n'.join(truncated_lines)
+                                
+                                bibliography_parts.append(f"\n[{display_id}] ({tool_name})\n{snippet_content}")
+                        
+                        bibliography_text = "\n".join(bibliography_parts)
+                        final_answer_with_citations += bibliography_text
+                        
+                        current_log["full_response"].append({
+                            "type": "bibliography",
+                            "content": bibliography_text
+                        })
+                    
+                    current_log["final_answer"] = final_answer_with_citations
+                
+                # Add tool usage stats
+                if browsed_links or searched_links or total_tool_calls > 0:
+                    stats = {
+                        "searched_links": len(searched_links),
+                        "browsed_links": len(browsed_links),
+                        "total_tool_calls": total_tool_calls,
+                        "failed_tool_calls": failed_tool_calls
+                    }
+                    current_log["full_response"].append({
+                        "type": "stats",
+                        "content": stats
+                    })
+                
+                # Add this interaction to logs
+                interaction_logs.append(current_log)
+                
+                # Save logs to separate JSON files
+                import json
+                log_base = log_file.with_suffix('')
+                
+                # Save full response log
+                full_log_file = log_base.with_suffix('.full.json')
+                full_logs = []
+                for log_entry in interaction_logs:
+                    full_logs.append({
+                        "user_query": log_entry["user_query"],
+                        "full_response": log_entry["full_response"]
+                    })
+                with open(full_log_file, "w", encoding="utf-8") as f:
+                    json.dump(full_logs, f, indent=2, ensure_ascii=False)
+                
+                # Save final answer log
+                answer_log_file = log_base.with_suffix('.answer.json')
+                answer_logs = []
+                for log_entry in interaction_logs:
+                    answer_logs.append({
+                        "user_query": log_entry["user_query"],
+                        "final_answer": log_entry["final_answer"]
+                    })
+                with open(answer_log_file, "w", encoding="utf-8") as f:
+                    json.dump(answer_logs, f, indent=2, ensure_ascii=False)
+            
         except KeyboardInterrupt:
             console.print("\n\n[bold yellow]Interrupted. Type 'exit' to quit or continue chatting.[/bold yellow]\n")
         except Exception as e:
@@ -573,6 +730,7 @@ def chat(
     verbose: bool = False,
     config_overrides: Optional[str] = None,
     show_full_tool_output: bool = False,
+    log_dir: Optional[str] = None,
 ):
     """
     Start an interactive chat session using the auto_search workflow.
@@ -583,6 +741,7 @@ def chat(
         verbose: Enable verbose output
         config_overrides: Comma-separated config overrides (e.g., 'param1=value1,param2=value2')
         show_full_tool_output: Show full tool output instead of truncating
+        log_dir: Optional directory to save chat logs
     """
     # Parse config overrides
     overrides = {}
@@ -616,6 +775,15 @@ def chat(
     # Set prompt version for CLI agent
     if "prompt_version" not in overrides:
         overrides["prompt_version"] = "cli"
+    
+    # Prepare log file if log_dir is provided
+    log_file = None
+    if log_dir:
+        import datetime
+        log_path = Path(log_dir)
+        log_path.mkdir(parents=True, exist_ok=True)
+        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        log_file = log_path / f"interactive_chat_{timestamp}.log"
 
     # Create workflow
     try:
@@ -640,7 +808,7 @@ def chat(
     
     # Run chat loop
     try:
-        asyncio.run(chat_loop(workflow, dataset_name=dataset_name, verbose=verbose, show_full_tool_output=show_full_tool_output))
+        asyncio.run(chat_loop(workflow, dataset_name=dataset_name, verbose=verbose, show_full_tool_output=show_full_tool_output, log_file=log_file))
     except KeyboardInterrupt:
         console.print("\n[bold yellow]Interrupted. Exiting.[/bold yellow]")
         sys.exit(0)
@@ -679,6 +847,11 @@ if __name__ == "__main__":
                 "--config-overrides",
                 help="Override configuration parameters in format 'param1=value1,param2=value2'",
             ),
+            log_dir: Optional[str] = typer.Option(
+                None,
+                "--log-dir",
+                help="Directory to save chat logs (creates timestamped log files)",
+            ),
         ):
             """Start an interactive chat session using the auto_search workflow."""
             chat(
@@ -687,6 +860,7 @@ if __name__ == "__main__":
                 verbose=verbose,
                 config_overrides=config_overrides,
                 show_full_tool_output=show_full_tool_output,
+                log_dir=log_dir,
             )
         
         app()
@@ -698,6 +872,7 @@ if __name__ == "__main__":
         parser.add_argument("--verbose", "-v", action="store_true", help="Verbose output")
         parser.add_argument("--show-full-tool-output", action="store_true", help="Show full tool output instead of truncating to 500 chars")
         parser.add_argument("--config-overrides", help="Config overrides in format 'param1=value1,param2=value2'")
+        parser.add_argument("--log-dir", help="Directory to save chat logs")
         args = parser.parse_args()
         
         # hardcode dataset name to long_form
@@ -707,5 +882,6 @@ if __name__ == "__main__":
             verbose=args.verbose,
             config_overrides=args.config_overrides,
             show_full_tool_output=args.show_full_tool_output,
+            log_dir=args.log_dir,
         )
 

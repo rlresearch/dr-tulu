@@ -329,6 +329,10 @@ Examples:
         action="store_true",
         help="Don't automatically launch vLLM servers (check only)"
     )
+    parser.add_argument(
+        "--log-dir",
+        help="Directory to save chat logs (creates timestamped log files)"
+    )
     
     args = parser.parse_args()
     
@@ -470,6 +474,9 @@ Examples:
     
     if args.show_full_tool_output:
         cmd.append("--show-full-tool-output")
+    
+    if args.log_dir:
+        cmd.extend(["--log-dir", args.log_dir])
 
     # Build config overrides
     overrides = []
