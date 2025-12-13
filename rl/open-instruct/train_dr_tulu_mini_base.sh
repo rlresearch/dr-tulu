@@ -26,8 +26,8 @@ uv run --extra compile python open_instruct/grpo_fast.py \
         --kl_estimator kl3 \
         --dataset_mixer_list ${dataset_list} \
         --dataset_mixer_list_splits train \
-        --dataset_mixer_eval_list rl-rag/healthbench_all_adaptive_rubric 16 \
-        --dataset_mixer_eval_list_splits test \
+        --dataset_mixer_eval_list rl-research/dr-tulu-rl-data 16 \
+        --dataset_mixer_eval_list_splits train \
         --apply_adaptive_rubric_reward true \
         --normalize_rubric_scores false \
         --use_rubric_buffer true \

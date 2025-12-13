@@ -51,6 +51,7 @@ dependencies = [
     "typer",
     "omegaconf",
     "datasets",
+    "retry",
 ]
 
 [project.optional-dependencies]

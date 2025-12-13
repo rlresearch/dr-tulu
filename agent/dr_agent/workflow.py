@@ -26,7 +26,7 @@ from pydantic import BaseModel
 from tqdm import tqdm
 from tqdm.asyncio import tqdm as tqdm_async
 
-from .evaluation_utils.data_types import DatasetConfig
+from .dataset_utils.data_types import DatasetConfig
 
 T = TypeVar("T")
 R = TypeVar("R")
@@ -425,10 +425,10 @@ class BaseWorkflow(ABC):
             List of results with original data and generated responses
         """
 
-        from .evaluation_utils.load_eval_data import load_eval_dataset
+        from .dataset_utils.load_dataset import load_dataset
 
         # Load dataset using configuration
-        dataset = load_eval_dataset(dataset_config)
+        dataset = load_dataset(dataset_config)
 
         # Handle worker-based data sharding
         dataset = self._shard_dataset_for_worker(dataset, **kwargs)
@@ -518,10 +518,10 @@ class BaseWorkflow(ABC):
         Returns:
             List of results with original data and generated responses
         """
-        from .evaluation_utils.load_eval_data import load_eval_dataset
+        from .dataset_utils.load_dataset import load_dataset
 
         # Load dataset
-        dataset = load_eval_dataset(dataset_config)
+        dataset = load_dataset(dataset_config)
 
         # Handle worker-based data sharding
         dataset = self._shard_dataset_for_worker(dataset, **kwargs)
@@ -1172,9 +1172,9 @@ class BaseWorkflow(ABC):
         Returns:
             True if merge was successful, False otherwise
         """
-        from pathlib import Path
         import json
         import os
+        from pathlib import Path
         
         output_path = Path(final_output_file)
         

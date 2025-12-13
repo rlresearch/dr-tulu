@@ -18,7 +18,7 @@ uv run python convert_rar_data.py --hf_org <your hf username>
 First, clone the repository:
 ```bash
 git clone https://github.com/rlresearch/dr-tulu.git
-cd dr-tulu/rl
+cd dr-tulu/rl/open-instruct
 ```
 
 We use uv to manage the dependencies:
@@ -33,10 +33,11 @@ echo "S2_API_KEY=xxx" >> .env
 echo "SERPER_API_KEY=xxx" >> .env
 echo "JINA_API_KEY=xxx >> .env
 ```
+And you should be done!
 
 Note that for original training, we used crawl4ai, which doesn't need the JINA_API_KEY, but may crawl directly from your IP (we used a proxy server during training, which we may share in future).
 
-And you should be done! Optionally, you can use our provided Dockerfile to build a Docker image:
+Optionally, you can use our provided Dockerfile to build a Docker image:
 ```bash
 docker build -t dr-tulu-rl .
 ```

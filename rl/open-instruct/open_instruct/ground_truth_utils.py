@@ -36,7 +36,6 @@ from open_instruct.math_utils import (
     normalize_final_answer,
     remove_boxed,
 )
-from open_instruct.search_rewards.old_rewards.openscholar_rewards import compute_paper_reward
 from open_instruct.search_rewards.longform_hle_rewards import compute_hle_reward
 from open_instruct.search_rewards.longform_rubric_rewards import compute_rubric_reward, compute_weighted_rubric_reward, compute_weighted_rubric_reward_with_citation_and_format_reward
 from open_instruct.search_rewards.longform_averaged_outcome_rewards import compute_longform_averaged_outcome_reward, compute_longform_averaged_outcome_reward_async
@@ -1079,23 +1078,6 @@ class CodeVerifier(VerifierFunction):
             type: The VerifierConfig class or its subclass
         """
         return CodeVerifierConfig
-
-
-class RLRAGLongFormVerifier(VerifierFunction):
-    """
-    Verifier that computes the RL-RAG (long form) score between the prediction and the label.
-    """
-
-    def __init__(self, verifier_config: Optional[VerifierConfig] = None) -> None:
-        super().__init__("rl_rag_longform", verifier_config=verifier_config, weight=1.0)
-
-    def __call__(
-        self, tokenized_prediction: List[int], prediction: str, label: str, query: Optional[str] = None
-    ) -> VerificationResult:
-        test_case = json.loads(label)
-        result = compute_paper_reward(prediction, test_case)
-        score = result["reward"]
-        return VerificationResult(score=score, log_values=result["log_values"])
 
 
 class RLRAGLongFormRubricsOnlyVerifier(VerifierFunction):
