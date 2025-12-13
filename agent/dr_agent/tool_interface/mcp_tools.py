@@ -804,6 +804,93 @@ class MassiveServeSearchTool(MCPSearchTool):
         return documents
 
 
+class DSServeSearchTool(MCPSearchTool):
+    """Tool for searching documents using DS Serve API via MCP"""
+
+    def __init__(
+        self,
+        tool_parser: Optional[ToolCallParser | str] = None,
+        number_documents_to_search: int = 10,
+        timeout: int = 60,
+        base_url: str = None,
+        backend: str = "diskann",
+        nprobe: Optional[int] = None,
+        exact_search: bool = False,
+        diverse_search: bool = False,
+        lambda_param: float = 0.5,
+        diskann_L: int = 500,
+        diskann_W: int = 8,
+        diskann_threads: Optional[int] = None,
+        min_words: int = 10,
+        name: Optional[str] = None,
+        **kwargs,
+    ):
+        super().__init__(
+            tool_parser=tool_parser,
+            number_documents_to_search=number_documents_to_search,
+            timeout=timeout,
+            name=name,
+            **kwargs,
+        )
+        self.base_url = base_url
+        self.backend = backend
+        self.nprobe = nprobe
+        self.exact_search = exact_search
+        self.diverse_search = diverse_search
+        self.lambda_param = lambda_param
+        self.diskann_L = diskann_L
+        self.diskann_W = diskann_W
+        self.diskann_threads = diskann_threads
+        self.min_words = min_words
+
+    def get_mcp_tool_name(self) -> str:
+        return "ds_serve_search"
+
+    def get_mcp_params(self, tool_call_info: ToolCallInfo) -> Dict[str, Any]:
+        """Build parameters for DS Serve API"""
+        params = {
+            "query": tool_call_info.content,
+            "n_docs": self.number_documents_to_search,
+            "backend": self.backend,
+        }
+        if self.base_url:
+            params["base_url"] = self.base_url
+        if self.nprobe is not None:
+            params["nprobe"] = self.nprobe
+        if self.exact_search:
+            params["exact_search"] = self.exact_search
+        if self.diverse_search:
+            params["diverse_search"] = self.diverse_search
+            params["lambda_param"] = self.lambda_param
+        if self.backend == "diskann":
+            params["diskann_L"] = self.diskann_L
+            params["diskann_W"] = self.diskann_W
+            if self.diskann_threads is not None:
+                params["diskann_threads"] = self.diskann_threads
+            params["min_words"] = self.min_words
+        return params
+
+    def extract_documents(self, raw_output: Dict[str, Any]) -> List[Document]:
+        """Extract documents from DS Serve response"""
+        data = raw_output.get("data", [])
+        documents = []
+
+        for item in data:
+            if isinstance(item, dict) and "passage" in item:
+                doc = Document(
+                    title=item.get("source", ""),  # Use source as title
+                    snippet=item["passage"].strip(),
+                    url="",  # No URLs from this service
+                    text=None,  # No full text content from search
+                    score=item.get("score"),
+                )
+
+                if doc.snippet:
+                    documents.append(doc)
+
+        return documents
+
+
 class MCPBrowseTool(MCPMixin, BaseTool, ABC):
     """Base class for MCP browse tools that fetch webpage content from URLs in search results"""
 

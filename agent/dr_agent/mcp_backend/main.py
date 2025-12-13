@@ -11,6 +11,7 @@ from starlette.responses import PlainTextResponse
 
 from .apis.data_model import Crawl4aiApiResult
 from .apis.massive_serve_apis import parse_massive_serve_results, search_massive_serve
+from .apis.ds_serve_apis import parse_ds_serve_results, search_ds_serve
 from .apis.pubmed_apis import search_pubmed
 from .apis.reranker_apis import RerankerResult
 from .apis.semantic_scholar_apis import (
@@ -250,6 +251,88 @@ def massive_serve_search(
             "passage": result.passage,
             "score": result.score,
             "doc_id": result.doc_id,
+        }
+        for result in parsed_results
+    ]
+
+    return response
+
+
+@mcp.tool(tags={"search", "necessary"})
+def ds_serve_search(
+    query: str,
+    n_docs: int = 10,
+    backend: str = "diskann",
+    base_url: Optional[str] = None,
+    nprobe: Optional[int] = None,
+    exact_search: bool = False,
+    diverse_search: bool = False,
+    lambda_param: float = 0.5,
+    diskann_L: int = 500,
+    diskann_W: int = 8,
+    diskann_threads: Optional[int] = None,
+    min_words: int = 10,
+) -> dict:
+    """
+    Search for documents using DS Serve API for dense passage retrieval.
+
+    This tool provides access to CompactDS (2B passages) using dual ANN backends
+    (DiskANN + IVFPQ) for efficient and scalable neural retrieval.
+
+    Args:
+        query: Search query string
+        n_docs: Number of documents to return (default: 10, max: 1000)
+        backend: Backend to use - "diskann" or "ivfpq" (default: "diskann")
+        base_url: Base URL for the DS Serve API (optional, uses default if not provided)
+        nprobe: Number of IVFPQ clusters to scan (ignored for DiskANN, optional)
+        exact_search: Brute-force rerank after ANN (default: False)
+        diverse_search: Penalize near-duplicate passages (default: False)
+        lambda_param: Diversity tradeoff used with diverse_search (default: 0.5)
+        diskann_L: DiskANN candidate list size (>= n_docs, default: 500)
+        diskann_W: DiskANN beam width / I/O fan-out (default: 8)
+        diskann_threads: Override worker thread count (optional, uses server default)
+        min_words: Minimum passage length filter (default: 10)
+
+    Returns:
+        Dictionary containing search results with the following fields:
+        - message: Status message
+        - query: The original search query
+        - n_docs: Number of documents requested
+        - nprobe: Number of probes used (if specified)
+        - results: Dictionary with passages, scores, and timing information
+        - data: Parsed list of search results with passage text, scores, and metadata
+    """
+    # Call the DS Serve API
+    response = search_ds_serve(
+        query=query,
+        n_docs=n_docs,
+        backend=backend,
+        base_url=base_url,
+        nprobe=nprobe,
+        exact_search=exact_search,
+        diverse_search=diverse_search,
+        lambda_param=lambda_param,
+        diskann_L=diskann_L,
+        diskann_W=diskann_W,
+        diskann_threads=diskann_threads,
+        min_words=min_words,
+    )
+
+    # Parse the results for easier consumption
+    parsed_results = parse_ds_serve_results(response)
+
+    # Add parsed data to the response for convenience
+    response["data"] = [
+        {
+            "passage": result.text,
+            "center_text": result.center_text,
+            "score": result.score,
+            "filename": result.filename,
+            "index_id": result.index_id,
+            "passage_id": result.passage_id,
+            "position": result.position,
+            "source": result.source,
+            "raw_query": result.raw_query,
         }
         for result in parsed_results
     ]

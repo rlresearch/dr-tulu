@@ -108,6 +108,10 @@ SYSTEM_PROMPT_V20250907 = load_yaml(
     (Path(__file__).parent / "unified_tool_calling_v20250907.yaml")
 )
 
+SYSTEM_PROMPT_V20250907_WITH_DS_SERVE = load_yaml(
+    (Path(__file__).parent / "unified_tool_calling_v20250907_with_ds_serve.yaml")
+)
+
 STRUCTURED_PROMPTS = {
     "v20250824": {
         "system_prompt": SYSTEM_PROMPT_V20250824,
@@ -116,4 +120,5 @@ STRUCTURED_PROMPTS = {
         "system_prompt": SYSTEM_PROMPT_V20250906,
     },
     "v20250907": SYSTEM_PROMPT_V20250907,
+    "v20250907_with_ds_serve": SYSTEM_PROMPT_V20250907_WITH_DS_SERVE,
 }

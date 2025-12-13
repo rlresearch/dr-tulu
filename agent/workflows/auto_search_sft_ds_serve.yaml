@@ -1,0 +1,40 @@
+tool_parser: "v20250824"
+
+# Client config for the SearchAgent (SFT model)
+search_agent_base_url: "http://localhost:30001/v1"
+search_agent_model_name: "rl-research/DR-Tulu-8B"
+search_agent_tokenizer_name: "Qwen/Qwen3-8B"
+search_agent_api_key: "dummy-key"
+search_agent_max_tokens: 32000
+search_agent_temperature: 1.0
+search_agent_max_tool_calls: 10
+
+# Use ds_serve prompt version
+prompt_version: "v20250907_with_ds_serve"
+
+# Client config for the browse/reader agent (general model)
+use_browse_agent: false
+browse_agent_base_url: "http://localhost:30002/v1"
+browse_agent_model_name: "Qwen/Qwen3-8B"
+browse_agent_tokenizer_name: "Qwen/Qwen3-8B"
+browse_agent_api_key: "dummy-key"
+browse_agent_max_tokens: 32000
+browse_agent_temperature: 0.3
+
+# Search tool configuration - using ds_serve
+number_documents_to_search: 10
+search_timeout: 180
+
+# DS Serve specific configuration
+ds_serve_backend: "diskann"  # or "ivfpq"
+ds_serve_nprobe: null  # Only used for ivfpq backend
+
+# Browse tool configuration (disabled for ds_serve only test)
+browse_tool_name: null
+browse_timeout: 180
+browse_max_pages_to_fetch: 10
+browse_context_char_length: 6000
+
+# MCP server configuration
+mcp_port: 8000
+

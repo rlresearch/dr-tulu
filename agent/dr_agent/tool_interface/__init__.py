@@ -4,6 +4,7 @@ from .chained_tool import ChainedTool
 from .data_types import Document, DocumentToolOutput
 from .mcp_tools import (
     Crawl4AIBrowseTool,
+    DSServeSearchTool,
     MassiveServeSearchTool,
     MCPMixin,
     SemanticScholarSnippetSearchTool,
@@ -30,6 +31,7 @@ __all__ = [
     "SemanticScholarSnippetSearchTool",
     "SerperSearchTool",
     "MassiveServeSearchTool",
+    "DSServeSearchTool",
     "SerperBrowseTool",
     "WebThinkerBrowseTool",
     "Crawl4AIBrowseTool",

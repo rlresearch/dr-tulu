@@ -15,6 +15,7 @@ from dr_agent.tool_interface.chained_tool import ChainedTool
 from dr_agent.tool_interface.mcp_tools import (
     BaseTool,
     Crawl4AIBrowseTool,
+    DSServeSearchTool,
     SemanticScholarSnippetSearchTool,
     SerperBrowseTool,
     SerperSearchTool,
@@ -70,13 +71,18 @@ Can you clean the raw webpage text and convert it into a more readable format? Y
 
 @dataclass
 class SearchAgent(BaseAgent):
+    prompt_version: str = "v20250907"
+    
     def prompt(
         self,
         question: str,
         dataset_name: Optional[str] = None,
     ) -> str:
 
-        PROMPT = UNIFIED_TOOL_CALLING_STRUCTURED_PROMPTS["v20250907"]
+        PROMPT = UNIFIED_TOOL_CALLING_STRUCTURED_PROMPTS.get(
+            self.prompt_version, 
+            UNIFIED_TOOL_CALLING_STRUCTURED_PROMPTS["v20250907"]
+        )
         if dataset_name in [
             "2wiki",
             "simpleqa",
@@ -147,10 +153,14 @@ class SearchAgent(BaseAgent):
 
 @dataclass
 class AnswerAgent(BaseAgent):
+    prompt_version: str = "v20250907"
 
     def prompt(self, question: str, history: str, dataset_name: str) -> str:
 
-        PROMPT = UNIFIED_TOOL_CALLING_STRUCTURED_PROMPTS["v20250907"]
+        PROMPT = UNIFIED_TOOL_CALLING_STRUCTURED_PROMPTS.get(
+            self.prompt_version,
+            UNIFIED_TOOL_CALLING_STRUCTURED_PROMPTS["v20250907"]
+        )
         if dataset_name in [
             "2wiki",
             "simpleqa",
@@ -245,6 +255,9 @@ class AutoReasonSearchWorkflow(BaseWorkflow):
         tool_parser: str
 
         search_tool_name: str = "serper"
+        prompt_version: str = "v20250907"  # Can be "v20250907" or "v20250907_with_ds_serve"
+        
+        mcp_port: int = 8000  # MCP server port
 
         # Separate generation client (SFT model)
         search_agent_base_url: Optional[str] = None
@@ -281,10 +294,13 @@ class AutoReasonSearchWorkflow(BaseWorkflow):
         self,
         mcp_transport_type: Optional[str] = "StreamableHttpTransport",
         mcp_executable: Optional[str] = None,
-        mcp_port: Optional[int] = 8000,
+        mcp_port: Optional[int] = None,
     ) -> None:
         cfg = self.configuration
         assert cfg is not None
+        # Use mcp_port from config if not provided as argument
+        if mcp_port is None:
+            mcp_port = getattr(cfg, "mcp_port", 8000)
         # print(cfg)
 
         # Search and browse tools (MCP-backed) with unified tool parser
@@ -348,6 +364,20 @@ class AutoReasonSearchWorkflow(BaseWorkflow):
                 mcp_executable=mcp_executable,
                 mcp_port=mcp_port,
             )
+        elif cfg.search_tool_name == "ds_serve":
+            self.search_tool = DSServeSearchTool(
+                tool_parser=cfg.tool_parser,
+                number_documents_to_search=cfg.number_documents_to_search,
+                timeout=cfg.search_timeout,
+                name="ds_serve_search",
+                backend=getattr(cfg, "ds_serve_backend", "diskann"),
+                nprobe=getattr(cfg, "ds_serve_nprobe", None),
+                transport_type=mcp_transport_type,
+                mcp_executable=mcp_executable,
+                mcp_port=mcp_port,
+            )
+            # For ds_serve, we only use one tool
+            self.search_tool2 = None
         else:
             raise ValueError(f"Invalid search tool name: {cfg.search_tool_name}")
 
@@ -418,12 +448,16 @@ class AutoReasonSearchWorkflow(BaseWorkflow):
             base_url=cfg.search_agent_base_url,
             api_key=cfg.search_agent_api_key,
         ) as client:
+            # Filter out None tools
+            tools_list = [t for t in [self.search_tool, self.search_tool2, self.composed_browse_tool] if t is not None]
             self.search_agent = SearchAgent(
                 client=client,
-                tools=[self.search_tool, self.search_tool2, self.composed_browse_tool],
+                tools=tools_list,
+                prompt_version=cfg.prompt_version,
             )
             self.answer_agent = AnswerAgent(
                 client=client,
+                prompt_version=cfg.prompt_version,
             )
 
     async def __call__(
