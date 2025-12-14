@@ -1,12 +1,17 @@
 model_name=rl-research/DR-Tulu-SFT-8B
 dataset_list="rl-research/dr-tulu-rl-data 1.0"
+exp_name="dr-tulu-rl-1node"
 # if you want to add the rar data, convert it to our format and then add to the dataset list, e.g.:
 # dataset_list="rl-research/dr-tulu-rl-data 1.0 rl-rag/RaR-Medicine-20k-o3-mini-converted 3000 rl-rag/RaR-Science-20k-o3-mini-converted 1000"
 
 # set env vars
-# you need all these apis by default.
-export WANDB_API_KEY=xxx
-export OPENAI_API_KEY=xxx
+# you need all these apis by default. Store them in your .env file.
+# export WANDB_API_KEY=xxx
+# export OPENAI_API_KEY=xxx
+# export SERPER_API_KEY=xxx
+# export S2_API_KEY=xxx
+# export JINA_API_KEY=xxx (if you use jina)
+# export CRAWL4AI_API_URL=xxx (if you use crawl4ai)
 # if using the docker container and crawl4ai, you can use this path.
 # Otherwise, you need to set the path to the blocklist file.
 # not used for jina.
@@ -19,7 +24,7 @@ export MCP_TRANSPORT_PORT=8003
 
 # setup a ray cluster, with 2 nodes and 8 GPUs per node.
 # in ai2, we use the following script:
-source configs/beaker_configs/ray_node_setup.sh
+# source configs/beaker_configs/ray_node_setup.sh
 
 
 uv run --extra compile python open_instruct/grpo_fast.py \
@@ -47,7 +52,7 @@ uv run --extra compile python open_instruct/grpo_fast.py \
         --max_prompt_token_length 2048 \
         --response_length 16384 \
         --pack_length 18500 \
-        --model_name_or_path ${model_path} \
+        --model_name_or_path ${model_name} \
         --non_stop_penalty False \
         --non_stop_penalty_value 0.0 \
         --temperature 1.0 \
@@ -55,8 +60,8 @@ uv run --extra compile python open_instruct/grpo_fast.py \
         --sft_messages_key messages \
         --total_episodes 10000000 \
         --deepspeed_stage 3 \
-        --num_learners_per_node 8 \
-        --vllm_num_engines 8 \
+        --num_learners_per_node 4 \
+        --vllm_num_engines 4 \
         --vllm_tensor_parallel_size 1 \
         --lr_scheduler_type constant \
         --apply_verifiable_reward true \
@@ -74,7 +79,7 @@ uv run --extra compile python open_instruct/grpo_fast.py \
         --mcp_parser_name v20250824 \
         --system_prompt_file open_instruct/search_utils/system_prompts/unified_tool_calling_v20250907.yaml  \
         --mcp_tool_names 'snippet_search,google_search,browse_webpage' \
-        --mcp_server_command "'python -m dr_agent.mcp_backend.main --transport http --port 8003 --host 0.0.0.0 --path /mcp'"
+        --mcp_server_command "uv run python -m dr_agent.mcp_backend.main --transport http --port 8003 --host 0.0.0.0 --path /mcp"
 
 # For people at Ai2, here is the exact command we used:
 #############
