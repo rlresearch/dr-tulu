@@ -137,6 +137,8 @@ def load_dataset(config: DatasetConfig) -> List[Dict]:
         return load_sqav2_data(num_examples, shuffle)
     elif config["name"] == "genetic_diseases_qa":
         return load_genetic_diseases_qa_data(num_examples, shuffle)
+    elif config["name"] == "dsqa":
+        return load_dsqa_data(num_examples, shuffle)
     elif config["name"] in ["2wiki", "webwalker"]:
         dataset_repo = SUPPORTED_TASKS[config["name"]]
         return load_shortformqa_data(dataset_repo, num_examples, shuffle)
@@ -519,6 +521,62 @@ def load_researchqa_data(
             }
         )
 
+    if shuffle:
+        random.seed(42)
+        random.shuffle(examples)
+
+    if num_examples:
+        examples = examples[:num_examples]
+
+    return examples
+
+def load_dsqa_data(
+    num_examples: Optional[int] = None,
+    shuffle: bool = False,
+) -> List[Dict]:
+    """
+    Load DSQA dataset data.
+
+    Args:
+        num_examples: Limit to first N examples (optional)
+        shuffle: Whether to shuffle the examples
+
+    Returns:
+        List of DSQA examples
+    """
+    import mlcroissant as mlc
+    import pandas as pd
+    from pathlib import Path
+    
+    dataset = mlc.Dataset("https://www.kaggle.com/datasets/deepmind/deepsearchqa/croissant/download")
+    record_set_name = "DSQA-full.csv"
+    records = dataset.records(record_set=record_set_name)
+
+    examples = []
+    for sample in records:
+        prob = sample[f"{record_set_name}/problem"].decode("utf-8")
+
+        # if answer is empty, return ""
+        raw = sample.get(f"{record_set_name}/answer")
+        ans_raw = raw.decode("utf-8") if raw else ""
+
+        ans_type = sample[f"{record_set_name}/answer_type"].decode("utf-8")
+
+        if ans_type and ans_type == "Set Answer":
+            # split on commas and strip whitespace
+            answers = [a.strip() for a in str(ans_raw).split(",") if a.strip()]
+        else:
+            answers = [ans_raw] if ans_raw is not None else []
+
+        examples.append(
+            {
+                "id": hashlib.md5(prob.encode()).hexdigest(),
+                "problem": prob,
+                "additional_instructions": "",
+                "answers": answers,
+            }
+        )
+    
     if shuffle:
         random.seed(42)
         random.shuffle(examples)

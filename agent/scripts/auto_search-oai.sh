@@ -13,7 +13,7 @@ mkdir -p $SAVE_FOLDER
 # Fast tasks
 # TASKS="simpleqa 2wiki healthbench"
 # TASKS="browsecomp bc_synthetic_depth_one_v2_verified bc_synthetic_varied_depth_o3_verified"
-TASKS="genetic_diseases_qa"
+TASKS="dsqa"
 
 # serper+crawl4ai+readerv2+max-tool-calls-10
 for task in $TASKS; do
