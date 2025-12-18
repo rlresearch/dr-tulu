@@ -534,49 +534,41 @@ def load_dsqa_data(
     num_examples: Optional[int] = None,
     shuffle: bool = False,
 ) -> List[Dict]:
-    """
-    Load DSQA dataset data.
-
-    Args:
-        num_examples: Limit to first N examples (optional)
-        shuffle: Whether to shuffle the examples
-
-    Returns:
-        List of DSQA examples
-    """
-    import mlcroissant as mlc
-    import pandas as pd
-    from pathlib import Path
+    """Load DSQA dataset data.
     
-    dataset = mlc.Dataset("https://www.kaggle.com/datasets/deepmind/deepsearchqa/croissant/download")
-    record_set_name = "DSQA-full.csv"
-    records = dataset.records(record_set=record_set_name)
+    # Download the dataset from Kaggle and upload to Hugging Face for consistency
+    import kagglehub
+    import pandas as pd
+    from datasets import Dataset
+    import os 
+    os.environ["HF_TOKEN"] = "xxx"
+
+    path = kagglehub.dataset_download("deepmind/deepsearchqa")
+    df = pd.read_csv(f"{path}/DSQA-full.csv")
+
+    ds = Dataset.from_pandas(df)
+    ds.push_to_hub("rl-research/dsqa")  
+    """
+    data = datasets.load_dataset("rl-research/dsqa", split="train")
 
     examples = []
-    for sample in records:
-        prob = sample[f"{record_set_name}/problem"].decode("utf-8")
+    for sample in data:
+        problem = sample["problem"]
+        ans_raw = sample.get("answer", "")
+        ans_type = sample.get("answer_type", "")
 
-        # if answer is empty, return ""
-        raw = sample.get(f"{record_set_name}/answer")
-        ans_raw = raw.decode("utf-8") if raw else ""
-
-        ans_type = sample[f"{record_set_name}/answer_type"].decode("utf-8")
-
-        if ans_type and ans_type == "Set Answer":
-            # split on commas and strip whitespace
+        if ans_type == "Set Answer":
             answers = [a.strip() for a in str(ans_raw).split(",") if a.strip()]
         else:
-            answers = [ans_raw] if ans_raw is not None else []
+            answers = [ans_raw] if ans_raw else []
 
-        examples.append(
-            {
-                "id": hashlib.md5(prob.encode()).hexdigest(),
-                "problem": prob,
-                "additional_instructions": "",
-                "answers": answers,
-            }
-        )
-    
+        examples.append({
+            "id": hashlib.md5(problem.encode()).hexdigest(),
+            "problem": problem,
+            "additional_instructions": "Your final response should be in the following format without any other text:\nExact Answer: <your succinct, final answer>",
+            "answers": answers,
+        })
+
     if shuffle:
         random.seed(42)
         random.shuffle(examples)

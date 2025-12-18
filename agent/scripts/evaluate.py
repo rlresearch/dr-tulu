@@ -231,7 +231,7 @@ def run_evaluation(
         eval_class = BrowseCompEval(grader_model=grader_sampler)
     elif task == "healthbench":
         eval_class = HealthBenchEval(grader_model=grader_sampler)
-    elif task in ["2wiki", "webwalker"]:
+    elif task in ["2wiki", "webwalker", "dsqa"]:
         eval_class = ShortFormQAEval(
             task=task, grader_model=grader_sampler, metric="judge"
         )

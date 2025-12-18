@@ -52,7 +52,7 @@ except ImportError:
 
 # Datasets
 from datasets import load_dataset
-from dr_agent.dataset_utils.load_dataset import load_shortformqa_data
+from dr_agent.dataset_utils.load_dataset import load_dsqa_data, load_shortformqa_data
 
 SUPPORTED_TASKS = {
     "2wiki_rlvr_no_prompt": "rulins/2wiki_rlvr_no_prompt",
@@ -71,6 +71,7 @@ SUPPORTED_TASKS = {
     "bc_synthetic_depth_one_v2_verified": "rl-rag/verifiable_synthetic_depth_one_v2_verified",
     "bc_synthetic_varied_depth_o3_verified": "rl-rag/verifiable_synthetic_varied_depth_o3_verified",
     "hle": "rl-rag/hle_rlvr_no_prompt",
+    "dsqa": "rl-research/dsqa",
 }
 
 
@@ -203,7 +204,10 @@ class ShortFormQAEval(Eval):
         # if num_examples:
         #     self.rows = self.rows[:num_examples]
         dataset_repo = SUPPORTED_TASKS[task]
-        self.rows = load_shortformqa_data(dataset_repo, num_examples)
+        if task == "dsqa":
+            self.rows = load_dsqa_data(num_examples)
+        else:
+            self.rows = load_shortformqa_data(dataset_repo, num_examples)
 
         print(f"Loaded {len(self.rows)} examples")
         self.metric = metric
