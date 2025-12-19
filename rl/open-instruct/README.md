@@ -35,7 +35,7 @@ echo "JINA_API_KEY=xxx >> .env
 ```
 And you should be done!
 
-Note that for original training, we used crawl4ai, which doesn't need the JINA_API_KEY, but may crawl directly from your IP (we used a proxy server during training, which we may share in future).
+Note that for original training, we used crawl4ai, which doesn't need the JINA_API_KEY, but may crawl directly from your IP (we used a proxy server during training, which we may share in future). To change the crawl4ai configuration, edit `rl/open-instruct/open_instruct/search_utils/mcp_tools.py` line 117 and down to edit the config. You can also change to use Jina instead of crawl4ai by changing the `browse_webpage` tool in the `MCP_TOOL_REGISTRY` to `JinaBrowseTool` (may also require some code changes, and requires a valid Jina API key).
 
 Optionally, you can use our provided Dockerfile to build a Docker image:
 ```bash
@@ -86,3 +86,5 @@ Like this:
 (ToolActor pid=500031) Returning error output anyway.
 (ToolActor pid=500031) Using MCP tool:  google_search
 ```
+Note that the tool error here is not a problem, it just means the tool didn't find any results for the query.
+Sometimes tool errors can indicate a misconfiguration (if they consistently return errors for all queries), but in general they are not a problem.
