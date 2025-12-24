@@ -111,6 +111,47 @@ class Crawl4aiApiClient(Crawl4aiDockerClient):
         return super()._request(method, self._path_url + endpoint, **kwargs)
 
 
+async def _do_crawl(
+    client: Crawl4aiApiClient,
+    url: str,
+    browser_config: BrowserConfig,
+    crawler_config: CrawlerRunConfig,
+    include_html: bool = False,
+) -> Crawl4aiApiResult:
+    """Helper to perform the actual crawl and handle results."""
+    results = await client.crawl(
+        [url], browser_config=browser_config, crawler_config=crawler_config
+    )
+
+    if not results:
+        return Crawl4aiApiResult(
+            url=url, success=False, markdown="", error="Crawl returned no results"
+        )
+
+    # Handle single result
+    result = results[0] if isinstance(results, list) else results
+
+    if not result.success:
+        return Crawl4aiApiResult(
+            url=result.url,
+            success=False,
+            markdown="",
+            error=result.error_message,
+        )
+
+    response_data = {
+        "url": result.url,
+        "success": True,
+        "markdown": result.markdown,
+        "fit_markdown": result.markdown.fit_markdown,
+    }
+
+    if include_html:
+        response_data["html"] = result.html
+
+    return Crawl4aiApiResult(**response_data)
+
+
 @cached()
 async def crawl_url_docker(
     url: str,
@@ -170,17 +211,31 @@ async def crawl_url_docker(
         api_key = ai2_config.get_api_key()
         base_url = ai2_config.get_base_url()
         browser_config = ai2_config.get_browser_config()
-        crawler_config = ai2_config.get_crawler_config(
+        # Try with markdown_generator first
+        crawler_config_with_md = ai2_config.get_crawler_config(
             cache_mode=CacheMode.BYPASS if bypass_cache else CacheMode.ENABLED,
             markdown_generator=md_generator,
             page_timeout=timeout_ms,
         )
+        # Fallback config without markdown_generator (for incompatible servers)
+        crawler_config_without_md = ai2_config.get_crawler_config(
+            cache_mode=CacheMode.BYPASS if bypass_cache else CacheMode.ENABLED,
+            page_timeout=timeout_ms,
+        )
     else:
         browser_config = BrowserConfig(headless=True)
-        crawler_config = CrawlerRunConfig(
+        crawler_config_with_md = CrawlerRunConfig(
             cache_mode=CacheMode.BYPASS if bypass_cache else CacheMode.ENABLED,
             page_timeout=timeout_ms,
             markdown_generator=md_generator,
+            exclude_social_media_links=True,
+            excluded_tags=["form", "header", "footer", "nav"],
+            exclude_domains=["ads.com", "spammytrackers.net"],
+            word_count_threshold=10,
+        )
+        crawler_config_without_md = CrawlerRunConfig(
+            cache_mode=CacheMode.BYPASS if bypass_cache else CacheMode.ENABLED,
+            page_timeout=timeout_ms,
             exclude_social_media_links=True,
             excluded_tags=["form", "header", "footer", "nav"],
             exclude_domains=["ads.com", "spammytrackers.net"],
@@ -191,35 +246,20 @@ async def crawl_url_docker(
         if api_key:
             await client.authenticate(api_key)
 
-        # Crawl the URL
-        results = await client.crawl(
-            [url], browser_config=browser_config, crawler_config=crawler_config
-        )
-
-        if not results:
-            return Crawl4aiApiResult(
-                url=url, success=False, markdown="", error="Crawl returned no results"
+        # Try with markdown_generator first
+        try:
+            return await _do_crawl(
+                client, url, browser_config, crawler_config_with_md, include_html
             )
-
-        # Handle single result
-        result = results[0] if isinstance(results, list) else results
-
-        if not result.success:
-            return Crawl4aiApiResult(
-                url=result.url,
-                success=False,
-                markdown="",
-                error=result.error_message,
-            )
-
-        response_data = {
-            "url": result.url,
-            "success": True,
-            "markdown": result.markdown,
-            "fit_markdown": result.markdown.fit_markdown,
-        }
-
-        if include_html:
-            response_data["html"] = result.html
-
-        return Crawl4aiApiResult(**response_data)
+        except Exception as e:
+            error_str = str(e)
+            # Check if it's a 500 error related to markdown_generator serialization
+            if "500" in error_str or "model_dump" in error_str:
+                print(f"[crawl4ai] markdown_generator caused error, retrying without it: {error_str[:100]}")
+                # Retry without markdown_generator
+                return await _do_crawl(
+                    client, url, browser_config, crawler_config_without_md, include_html
+                )
+            else:
+                # Re-raise other errors
+                raise
