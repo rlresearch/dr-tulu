@@ -494,6 +494,51 @@ def create_app(
         # Signal completion
         await event_queue.put(None)
 
+    @app.post("/chat")
+    async def chat(request: ChatRequest, _: bool = Depends(verify_auth)):
+        """
+        Simple chat endpoint that returns the complete response.
+
+        Client sends: { "content": "...", "dataset_name": "..." }
+        Server returns: { "response": "...", "metadata": {...} }
+        """
+        if app.state.workflow is None:
+            raise HTTPException(status_code=500, detail="Workflow not initialized")
+
+        # Prepare messages
+        messages_dicts = []
+        content = ""
+
+        if request.messages:
+            messages_dicts = [
+                {"role": m.role, "content": m.content} for m in request.messages
+            ]
+            if messages_dicts:
+                for m in reversed(messages_dicts):
+                    if m["role"] == "user":
+                        content = m["content"]
+                        break
+        elif request.content:
+            content = request.content
+            messages_dicts = [{"role": "user", "content": content}]
+
+        result = await app.state.workflow(
+            problem=content,
+            dataset_name=request.dataset_name,
+            messages=messages_dicts,
+            verbose=False,
+        )
+
+        return {
+            "response": result.get("final_response", ""),
+            "metadata": {
+                "total_tool_calls": result.get("total_tool_calls", 0),
+                "failed_tool_calls": result.get("total_failed_tool_calls", 0),
+                "browsed_links": result.get("browsed_links", []),
+                "searched_links": result.get("searched_links", []),
+            },
+        }
+
     @app.post("/chat/stream")
     async def chat_stream(request: ChatRequest, _: bool = Depends(verify_auth)):
         """
@@ -570,6 +615,7 @@ def create_app(
             "status": "ok",
             "workflow_loaded": app.state.workflow is not None,
             "ui_mode": ui_mode,
+            "endpoints": ["/chat", "/chat/stream"],
         }
 
     # Mount UI files if available

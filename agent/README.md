@@ -61,9 +61,28 @@ Note you will need to get these API keys from the respective services.
     bash scripts/auto_search-oai.sh
     ```
 
-## Interactive Chat
+## Creating a server service with any workflow 
 
-### In Live Interface 
+You can turn any workflow into a chat-based HTTP API with both a synchronous and streaming endpoint:
+- **`/chat`**: Simple request-response endpoint, returns the complete response as JSON
+- **`/chat/stream`**: SSE streaming endpoint, streams thinking, tool calls, and answers in real-time
+
+```bash 
+# Launch the server (assumes MCP and model servers are running)
+python workflows/auto_search_sft.py serve --port 8080
+
+# Example: simple chat endpoint
+curl -X POST http://localhost:8080/chat \
+  -H "Content-Type: application/json" \
+  -d '{"content": "What is the capital of France?"}'
+
+# Example: streaming endpoint (SSE)
+curl -X POST http://localhost:8080/chat/stream \
+  -H "Content-Type: application/json" \
+  -d '{"content": "What is the capital of France?"}'
+```
+
+### Chat with an interactive live demo 
 
 ```bash 
 # Install additional dependencies
@@ -71,7 +90,6 @@ uv pip install ".[ui]"
 
 # Launch the interactive interface with the workflow
 python workflows/auto_search_sft.py serve --port 8080
-# (this assumes you also launch other needed MCP and model server)
 
 # In UI dev mode
 python workflows/auto_search_sft.py serve --port 8080 --ui-mode proxy
@@ -85,7 +103,7 @@ python workflows/auto_search_sft.py serve --port 8080 --password "your-secure-pa
 ```
 
 
-### In CLI 
+## Interactive chat with CLI 
 
 We provide an interactive cli demo for the auto_search workflow.
 Requires 1-2 GPUs. We recommend running with `uv`, which should install everything you need and then launch the tool, but set your API keys first:
