@@ -1,69 +1,73 @@
 # `dr-agent-lib`
 
-## Overview
-
 `dr-agent-lib` is an agent library for training and developing deep research agents. It supports:
 - **MCP-Based Tool Backend**: Unified interface for web search and browsing tools
 - **High Concurrency**: Global caching and async request management for RL training at scale
 - **Flexible Prompting Interface**: Easy composition of search workflows with fine-grained control
 
-## Setup 
+## Quick start 
 
 Below we assume you are already in the `agent` directory. 
 
-```bash
-conda create -n dr_agent python=3.10 -y && conda activate dr_agent
-
-uv pip install -e .     # Install dev version
-uv pip install dr_agent # Install from pypi 
-```
-
-If you run crawl4ai locally, you will need to install playwright and its dependencies.
-
-Set up API keys via `.env` file:
-```bash
-S2_API_KEY=xxx
-SERPER_API_KEY=xxx
-JINA_API_KEY=xxx
-```
-Note you will need to get these API keys from the respective services.
-- S2_API_KEY: https://api.semanticscholar.org/
-- SERPER_API_KEY: https://serper.dev/
-- JINA_API_KEY: https://jina.ai/reader/
-
-## Getting started 
-
-1. Launch MCP Server 
-
+1. Installation 
     ```bash
-    MCP_CACHE_DIR=".cache-$(hostname)" python -m dr_agent.mcp_backend.main --port 8000
+    # [Optional] create an environment 
+    # conda create -n dr_agent python=3.10 -y && conda activate dr_agent
+
+    # Install the latest dev version of dr_agent library 
+    uv pip install -e ".[ui]"    
+    
+    # Or you can directly install from pypi 
+    # uv pip install dr_agent 
     ```
 
-2. Using DR-Tulu Models 
+2. Setting up the environment variables for the backend service: `cp .env.example .env` and edit the following environment variables 
 
-    - Start the VLLM Server 
-
-       ```bash 
-       CUDA_VISIBLE_DEVICES=0 vllm serve rl-research/DR-Tulu-8B --dtype auto --port 30002 --max-model-len 40960
-       
-       CUDA_VISIBLE_DEVICES=1 vllm serve Qwen/Qwen3-8B --dtype auto --port 30003 --max-model-len 40960
-       ```
-
-    - Run generation script 
-
-       ```bash
-       bash scripts/auto_search.sh
-       ```
-
-3. Using OAI models 
     ```bash
-    export OPENAI_API_KEY="XXXX"
-    bash scripts/auto_search-oai.sh
+    SERPER_API_KEY=xxx # [Must have] Needed for serper search 
+    S2_API_KEY=xxx     # Needed for snippet search 
+    JINA_API_KEY=xxx   # Needed for jina-based browsing tool 
     ```
+    You can get these API keys from the respective services.
+    - `SERPER_API_KEY`: https://serper.dev/
+    - `S2_API_KEY`: https://api.semanticscholar.org/
+    - `JINA_API_KEY`: https://jina.ai/reader/
 
-## Creating a server service with any workflow 
+3. Launch the `autosearch` workflow: 
+    - For simple debugging purpose, you can directly launch the service without any GPUs using openai models (this requires setting the `OPENAI_API_KEY`)
+      ```bash
+      export OPENAI_API_KEY="sk-xxx"
 
-You can turn any workflow into a chat-based HTTP API with both a synchronous and streaming endpoint:
+      python workflows/auto_search_sft.py serve --port 8080 --config workflows/auto_search_sft-oai.yaml
+      ```
+      It will load a web server where you can directly chat with the agent in the interface. 
+
+    - [1~2 GPUs needed] For the workflow, you can also use it with `rl-research/DR-Tulu-8B` by serving the models yourself with VLLM:
+      ```bash 
+      # You need to install vllm though 
+      # uv pip install vllm 
+
+      python workflows/auto_search_sft.py serve --port 8080 
+      ``` 
+      The command prompts you whether to launch the needed VLLM backend, e.g.,  
+      ```
+      ⚠  Search agent vLLM server is not running on port 30001
+      Launch vLLM server for rl-research/DR-Tulu-8B on port 30001? [y/n]: y
+      ```
+      Or you can launch the models separately yourself. 
+      ```bash 
+      CUDA_VISIBLE_DEVICES=0 vllm serve rl-research/DR-Tulu-8B --port 30001 --dtype auto --max-model-len 40960
+      ```
+
+
+> [!NOTE]
+> If you run crawl4ai locally, you will need to install playwright and its dependencies.
+
+
+## Deepdive into the `serve` command: 
+
+The `serve` command can turn any workflow into a fastapi service with the following endpoints 
+
 - **`/chat`**: Simple request-response endpoint, returns the complete response as JSON
 - **`/chat/stream`**: SSE streaming endpoint, streams thinking, tool calls, and answers in real-time
 
@@ -82,28 +86,41 @@ curl -X POST http://localhost:8080/chat/stream \
   -d '{"content": "What is the capital of France?"}'
 ```
 
-### Chat with an interactive live demo 
+### Protect the UI with the passwords
 
-```bash 
-# Install additional dependencies
-uv pip install ".[ui]" 
-
-# Launch the interactive interface with the workflow
-python workflows/auto_search_sft.py serve --port 8080
-
-# In UI dev mode
-python workflows/auto_search_sft.py serve --port 8080 --ui-mode proxy
-
-# With password protection (optional)
-# Users will see a login page before accessing the UI
-# 
+```bash
 # You can generate a random password with 
 # openssl rand -base64 32
 python workflows/auto_search_sft.py serve --port 8080 --password "your-secure-password"
 ```
 
+### Develop the chat frontend
 
-## Interactive chat with CLI 
+```bash 
+cd ../app && npm install && npm run dev 
+
+# Change the ui url accordingly 
+python workflows/auto_search_sft.py serve --port 8080 --ui-mode proxy --dev-url http://localhost:3000 
+```
+
+## Running evaluation on the datasets
+
+We also provide a command to generate the results for examples in a given dataset: 
+
+```bash
+python workflows/auto_search_sft.py generate-dataset healthbench \
+    --num-examples 5 \
+    --max-concurrent 5 
+    --output healthbench.jsonl
+```
+
+We include evaluation scripts for multiple benchmarks, including:
+- **Long-form**: SQA-CS-V2, Deep Research Bench, ResearchQA, HealthBench, Genetic Diseases  
+- **Short-form**: BrowseComp, SimpleQA, 2Wiki, etc.
+
+For detailed evaluation instructions, benchmark descriptions, and usage examples, see [`evaluation/README.md`](evaluation/README.md). 
+
+## [experimental] Interactive chat with CLI 
 
 We provide an interactive cli demo for the auto_search workflow.
 Requires 1-2 GPUs. We recommend running with `uv`, which should install everything you need and then launch the tool, but set your API keys first:
@@ -167,12 +184,3 @@ Examples:
   # Custom config file
   python scripts/launch_chat.py --config workflows/auto_search_sft.yaml
 ```
-
-## Evaluation
-
-This repository includes evaluation scripts for multiple benchmarks, including:
-- **Long-form**: SQA-CS-V2, Deep Research Bench, ResearchQA, HealthBench
-- **Domain-specific**: Genetic Diseases  
-- **Short-form**: BrowseComp, SimpleQA, Short Form QA
-
-For detailed evaluation instructions, benchmark descriptions, and usage examples, see [`evaluation/README.md`](evaluation/README.md). 
