@@ -1240,6 +1240,11 @@ class BaseWorkflow(ABC):
                 "--ui-mode",
                 help="UI mode to use",
             ),
+            dev_url: Optional[str] = typer.Option(
+                None,
+                "--dev-url",
+                help="URL of the development server (e.g., 'http://localhost:3000'). Required if ui_mode is 'proxy'",
+            ),
             config_file: Optional[str] = typer.Option(
                 None,
                 "--config",
@@ -1309,14 +1314,42 @@ class BaseWorkflow(ABC):
             cls.__logger__.info("Workflow initialized successfully")
 
             # Create FastAPI app
-            fastapi_app = create_app(workflow, ui_mode=ui_mode, password=password)
+            fastapi_app = create_app(
+                workflow, ui_mode=ui_mode, password=password, dev_url=dev_url
+            )
 
             # Start server
-            cls.__logger__.info(f"Starting server at http://{host}:{port}")
+            url = (
+                f"http://localhost:{port}"
+                if host == "0.0.0.0"
+                else f"http://{host}:{port}"
+            )
+            cls.__logger__.info(f"Starting server at {url}")
             if password:
                 cls.__logger__.warning("🔒 Password authentication is enabled")
-            cls.__logger__.info(f"SSE endpoint: http://{host}:{port}/chat/stream")
-            cls.__logger__.info(f"Health check: http://{host}:{port}/health")
+            cls.__logger__.info(f"SSE endpoint: {url}/chat/stream")
+            cls.__logger__.info(f"Health check: {url}/health")
+
+            # Setup browser opening on startup
+            import threading
+            import time
+            import webbrowser
+
+            def open_browser():
+                time.sleep(1.5)  # Wait for server to start
+                cls.__logger__.info(f"\n{'='*60}")
+                cls.__logger__.info(f"🌐 UI is available at: {url}")
+                cls.__logger__.info(f"{'='*60}\n")
+                try:
+                    webbrowser.open(url)
+                    cls.__logger__.info("✓ Browser opened automatically")
+                except Exception as e:
+                    cls.__logger__.info(f"⚠ Could not open browser automatically: {e}")
+                    cls.__logger__.info(f"Please open {url} in your browser manually")
+
+            # Start browser opening in background thread
+            browser_thread = threading.Thread(target=open_browser, daemon=True)
+            browser_thread.start()
 
             uvicorn.run(fastapi_app, host=host, port=port)
 
