@@ -16,6 +16,8 @@ import time
 from pathlib import Path
 from typing import Optional
 
+from rich.console import Console
+
 
 def check_port(port: int, timeout: float = 1.0) -> bool:
     """Check if a port is listening."""
@@ -43,10 +45,14 @@ def launch_mcp_server(
     port: int = 8000, logger: Optional[logging.Logger] = None
 ) -> Optional[subprocess.Popen]:
     """Launch MCP server in background."""
+    console = Console()
+
     if logger:
         logger.info(f"Launching MCP server on port {port}...")
     else:
-        print(f"🚀 Launching MCP server on port {port}...")
+        console.print(
+            f"[cyan]🚀[/cyan] Launching MCP server on port [bold]{port}[/bold]..."
+        )
 
     env = os.environ.copy()
     env["MCP_CACHE_DIR"] = (
@@ -57,7 +63,7 @@ def launch_mcp_server(
     if logger:
         logger.info(f"MCP server output will be logged to {log_file}")
     else:
-        print(f"📋 MCP server output will be logged to {log_file}")
+        console.print(f"[dim]📋 MCP server output will be logged to {log_file}[/dim]")
 
     with open(log_file, "w") as f:
         process = subprocess.Popen(
@@ -72,7 +78,7 @@ def launch_mcp_server(
     if logger:
         logger.info("Waiting for MCP server to start...")
     else:
-        print("⏳ Waiting for MCP server to start...")
+        console.print("[yellow]⏳[/yellow] Waiting for MCP server to start...")
 
     for _ in range(20):
         time.sleep(0.5)
@@ -80,7 +86,9 @@ def launch_mcp_server(
             if logger:
                 logger.info(f"MCP server started (PID: {process.pid})")
             else:
-                print(f"✓ MCP server started (PID: {process.pid})")
+                console.print(
+                    f"[green]✓[/green] MCP server started [dim](PID: {process.pid})[/dim]"
+                )
             return process
 
     if process.poll() is None:
@@ -89,8 +97,8 @@ def launch_mcp_server(
                 "MCP server process started but port check failed. Continuing anyway..."
             )
         else:
-            print(
-                f"⚠ MCP server process started but port check failed. Continuing anyway..."
+            console.print(
+                "[yellow]⚠[/yellow] MCP server process started but port check failed. Continuing anyway..."
             )
         return process
     else:
@@ -99,8 +107,10 @@ def launch_mcp_server(
                 f"MCP server failed to start (exit code: {process.returncode}). Check logs: {log_file}"
             )
         else:
-            print(f"❌ MCP server failed to start (exit code: {process.returncode})")
-            print(f"Check logs: {log_file}")
+            console.print(
+                f"[red]❌[/red] MCP server failed to start [dim](exit code: {process.returncode})[/dim]"
+            )
+            console.print(f"[dim]Check logs: {log_file}[/dim]")
         return None
 
 
@@ -108,10 +118,14 @@ def launch_vllm_server(
     model_name: str, port: int, gpu_id: int = 0, logger: Optional[logging.Logger] = None
 ) -> Optional[subprocess.Popen]:
     """Launch vLLM server in background."""
+    console = Console()
+
     if logger:
         logger.info(f"Launching vLLM server for model {model_name} on port {port}...")
     else:
-        print(f"🚀 Launching vLLM server for model {model_name} on port {port}...")
+        console.print(
+            f"[cyan]🚀[/cyan] Launching vLLM server for model [bold cyan]{model_name}[/bold cyan] on port [bold]{port}[/bold]..."
+        )
 
     # Try to find vllm command
     import shutil
@@ -137,11 +151,11 @@ def launch_vllm_server(
                 "vllm command not found. Install vllm with: uv pip install -e '.[vllm]' or uv pip install 'dr_agent[vllm]'"
             )
         else:
-            print(
-                "❌ Error: vllm command not found. Tried: vllm, uv run vllm, python -m vllm.entrypoints.openai.api_server"
+            console.print(
+                "[red]❌[/red] Error: vllm command not found. Tried: vllm, uv run vllm, python -m vllm.entrypoints.openai.api_server"
             )
-            print(
-                "💡 Install vllm with: uv pip install -e '.[vllm]' or uv pip install 'dr_agent[vllm]'"
+            console.print(
+                "[blue]💡[/blue] Install vllm with: [dim]uv pip install -e '.[vllm]'[/dim] or [dim]uv pip install 'dr_agent[vllm]'[/dim]"
             )
         return None
 
@@ -166,9 +180,11 @@ def launch_vllm_server(
             "Waiting for vLLM server to become ready (this may take a few minutes)..."
         )
     else:
-        print(f"📋 vLLM output for {model_name} will be logged to {log_file}")
-        print(
-            "⏳ Waiting for vLLM server to become ready (this may take a few minutes)..."
+        console.print(
+            f"[dim]📋 vLLM output for {model_name} will be logged to {log_file}[/dim]"
+        )
+        console.print(
+            "[yellow]⏳[/yellow] Waiting for vLLM server to become ready [dim](this may take a few minutes)...[/dim]"
         )
 
     with open(log_file, "w") as f:
@@ -186,7 +202,9 @@ def launch_vllm_server(
             if logger:
                 logger.info(f"vLLM server started (PID: {process.pid})")
             else:
-                print(f"✓ vLLM server started (PID: {process.pid})")
+                console.print(
+                    f"[green]✓[/green] vLLM server started [dim](PID: {process.pid})[/dim]"
+                )
             return process
 
         if process.poll() is not None:
@@ -195,10 +213,10 @@ def launch_vllm_server(
                     f"vLLM server failed to start (exit code: {process.returncode}). Check logs: {log_file}"
                 )
             else:
-                print(
-                    f"❌ vLLM server failed to start (exit code: {process.returncode})"
+                console.print(
+                    f"[red]❌[/red] vLLM server failed to start [dim](exit code: {process.returncode})[/dim]"
                 )
-                print(f"Check logs: {log_file}")
+                console.print(f"[dim]Check logs: {log_file}[/dim]")
             return None
 
         time.sleep(2)
@@ -208,7 +226,9 @@ def launch_vllm_server(
             if logger:
                 logger.info(f"Still waiting for vLLM server ({elapsed}s)...")
             else:
-                print(f"⏳ Still waiting for vLLM server ({elapsed}s)...")
+                console.print(
+                    f"[yellow]⏳[/yellow] Still waiting for vLLM server [dim]({elapsed}s)...[/dim]"
+                )
 
     if process.poll() is None:
         if logger:
@@ -216,8 +236,8 @@ def launch_vllm_server(
                 "vLLM server process started but port check timed out. It may still be initializing..."
             )
         else:
-            print(
-                f"⚠ vLLM server process started but port check timed out. It may still be initializing..."
+            console.print(
+                "[yellow]⚠[/yellow] vLLM server process started but port check timed out. It may still be initializing..."
             )
         return process
     else:
@@ -226,5 +246,7 @@ def launch_vllm_server(
                 f"vLLM server failed to start (exit code: {process.returncode})"
             )
         else:
-            print(f"❌ vLLM server failed to start (exit code: {process.returncode})")
+            console.print(
+                f"[red]❌[/red] vLLM server failed to start [dim](exit code: {process.returncode})[/dim]"
+            )
         return None
