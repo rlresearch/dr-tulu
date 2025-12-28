@@ -30,10 +30,11 @@ def check_port(port: int, timeout: float = 1.0) -> bool:
 
 def extract_port_from_url(url_str: str) -> Optional[int]:
     """Extract port number from URL string."""
+    # Remove the scheme (http:// or https://) to avoid false positives
     if "://" in url_str:
-        url = url_str.rstrip("/")
-    else:
-        url = f"http://{url_str}".rstrip("/")
+        url_str = url_str.split("://", 1)[1]
+
+    url = url_str.rstrip("/")
 
     if ":" in url:
         port_str = url.split(":")[-1].split("/")[0]
