@@ -3,6 +3,8 @@ import inspect
 import json
 import logging
 import os
+import signal
+import subprocess
 from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import (
@@ -170,6 +172,7 @@ class BaseWorkflow(ABC):
         configuration: Optional[
             Union[BaseWorkflowConfiguration, Dict[str, Any], str]
         ] = None,
+        skip_service_check: bool = False,
         **overrides: Any,
     ) -> None:
         """
@@ -180,10 +183,21 @@ class BaseWorkflow(ABC):
                 - Pydantic configuration instance
                 - Dictionary of configuration values
                 - String path to a YAML file OR a YAML content string
+            skip_service_check: If True, skip checking/launching required services
             overrides: Keyword overrides to apply on top of the configuration
         """
         self.configuration = self._build_configuration(configuration, **overrides)
+        self._launched_processes: List[subprocess.Popen] = []
+
+        if not skip_service_check:
+            self.before_launch_check()
+
         self.setup_components()
+
+    def __del__(self):
+        """Cleanup launched processes when workflow is destroyed."""
+        if hasattr(self, "_launched_processes"):
+            self.cleanup_launched_processes()
 
     # ---- Configuration helpers ----
 
@@ -358,6 +372,31 @@ class BaseWorkflow(ABC):
         return results
 
     # ---- Lifecycle hooks ----
+
+    def before_launch_check(self) -> None:
+        """
+        Check if required services are running and optionally launch them.
+
+        Override this method in subclasses to implement custom service checks.
+        Default implementation does nothing.
+        """
+        pass
+
+    def cleanup_launched_processes(self) -> None:
+        """Clean up any processes launched during service checks."""
+        for process in self._launched_processes:
+            if process and process.poll() is None:
+                try:
+                    if hasattr(os, "setsid"):
+                        os.killpg(os.getpgid(process.pid), signal.SIGTERM)
+                    else:
+                        process.terminate()
+                    process.wait(timeout=5)
+                except Exception:
+                    if hasattr(os, "setsid"):
+                        os.killpg(os.getpgid(process.pid), signal.SIGKILL)
+                    else:
+                        process.kill()
 
     @abstractmethod
     def setup_components(self) -> None:

@@ -4,7 +4,7 @@ import json
 import os
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, Optional, Union
 
 import dotenv
 from dr_agent.agent_interface import BaseAgent
@@ -18,6 +18,12 @@ from dr_agent.tool_interface.mcp_tools import (
     SemanticScholarSnippetSearchTool,
     SerperBrowseTool,
     SerperSearchTool,
+)
+from dr_agent.utils import (
+    check_port,
+    extract_port_from_url,
+    launch_mcp_server,
+    launch_vllm_server,
 )
 from dr_agent.workflow import BaseWorkflow, BaseWorkflowConfiguration
 
@@ -75,7 +81,6 @@ class SearchAgent(BaseAgent):
         self,
         question: str,
         dataset_name: Optional[str] = None,
-        history: Optional[List[Dict[str, str]]] = None,
     ) -> str:
 
         PROMPT = UNIFIED_TOOL_CALLING_STRUCTURED_PROMPTS[self.prompt_version]
@@ -89,7 +94,6 @@ class SearchAgent(BaseAgent):
             "bc_synthetic_varied_depth_o3_verified",
             "webwalker",
             "hle",
-            "dsqa",
         ]:
             instruction_field_name = "exact_answer"
         elif dataset_name in ["sqav2", "genetic_diseases_qa"]:
@@ -114,17 +118,11 @@ class SearchAgent(BaseAgent):
                 print("set additional instructions none")
                 instruction_field_name = None
 
-        messages = [
+        return [
             {
                 "role": "system",
                 "content": system_prompt,
-            }
-        ]
-
-        if history:
-            messages.extend(history)
-
-        messages.append(
+            },
             {
                 "role": "user",
                 "content": (
@@ -134,10 +132,8 @@ class SearchAgent(BaseAgent):
                     if instruction_field_name is not None
                     else question
                 ),
-            }
-        )
-
-        return messages
+            },
+        ]
 
     def postprocess_output(self, result: Dict[str, Any]) -> str:
         output_string = result.generated_text
@@ -172,7 +168,6 @@ class AnswerAgent(BaseAgent):
             "bc_synthetic_depth_one_v2_verified",
             "bc_synthetic_varied_depth_o3_verified",
             "webwalker",
-            "dsqa",
         ]:
             instruction_field_name = "exact_answer"
         elif dataset_name in ["sqav2", "genetic_diseases_qa"]:
@@ -296,6 +291,110 @@ class AutoReasonSearchWorkflow(BaseWorkflow):
         crawl4ai_use_ai2_config: bool = False
 
         prompt_version: str = "v20250907"
+
+    def before_launch_check(self) -> None:
+        """Check if MCP server and vLLM servers are running, launch if needed."""
+        cfg = self.configuration
+        if cfg is None:
+            return
+
+        print("\n=== Service Check ===\n")
+
+        # Check MCP server
+        mcp_port = getattr(cfg, "mcp_port", 8000)
+        if not check_port(mcp_port):
+            print(f"⚠ MCP server is not running on port {mcp_port}")
+            response = input("Launch MCP server? (y/n): ").strip().lower()
+            if response == "y":
+                process = launch_mcp_server(mcp_port, self.logger)
+                if process:
+                    self._launched_processes.append(process)
+                else:
+                    raise RuntimeError(
+                        "Failed to start MCP server. Please launch it manually."
+                    )
+            else:
+                raise RuntimeError(
+                    "MCP server is required. Please launch it manually or allow automatic launch."
+                )
+        else:
+            print(f"✓ MCP server is running on port {mcp_port}")
+
+        # Check search agent vLLM server
+        search_base_url = getattr(cfg, "search_agent_base_url", None)
+        if search_base_url:
+            port = extract_port_from_url(search_base_url)
+            if port and not check_port(port):
+                print(f"⚠ Search agent vLLM server is not running on port {port}")
+                search_model = getattr(cfg, "search_agent_model_name", None)
+                if search_model:
+                    response = (
+                        input(
+                            f"Launch vLLM server for {search_model} on port {port}? (y/n): "
+                        )
+                        .strip()
+                        .lower()
+                    )
+                    if response == "y":
+                        process = launch_vllm_server(
+                            search_model, port, gpu_id=0, logger=self.logger
+                        )
+                        if process:
+                            self._launched_processes.append(process)
+                        else:
+                            print(
+                                f"⚠ Failed to start vLLM server. You may need to launch it manually:"
+                            )
+                            print(
+                                f"   vllm serve {search_model} --port {port} --dtype auto --max-model-len 40960"
+                            )
+                    else:
+                        print(f"💡 You can launch the server manually:")
+                        print(
+                            f"   vllm serve {search_model} --port {port} --dtype auto --max-model-len 40960"
+                        )
+            elif port:
+                print(f"✓ Search agent vLLM server is accessible on port {port}")
+
+        # Check browse agent vLLM server if enabled
+        use_browse_agent = getattr(cfg, "use_browse_agent", False)
+        if use_browse_agent:
+            browse_base_url = getattr(cfg, "browse_agent_base_url", None)
+            if browse_base_url:
+                port = extract_port_from_url(browse_base_url)
+                if port and not check_port(port):
+                    print(f"⚠ Browse agent vLLM server is not running on port {port}")
+                    browse_model = getattr(cfg, "browse_agent_model_name", None)
+                    if browse_model:
+                        response = (
+                            input(
+                                f"Launch vLLM server for {browse_model} on port {port}? (y/n): "
+                            )
+                            .strip()
+                            .lower()
+                        )
+                        if response == "y":
+                            process = launch_vllm_server(
+                                browse_model, port, gpu_id=1, logger=self.logger
+                            )
+                            if process:
+                                self._launched_processes.append(process)
+                            else:
+                                print(
+                                    f"⚠ Failed to start vLLM server. You may need to launch it manually:"
+                                )
+                                print(
+                                    f"   CUDA_VISIBLE_DEVICES=1 vllm serve {browse_model} --port {port} --dtype auto --max-model-len 40960"
+                                )
+                        else:
+                            print(f"💡 You can launch the server manually:")
+                            print(
+                                f"   CUDA_VISIBLE_DEVICES=1 vllm serve {browse_model} --port {port} --dtype auto --max-model-len 40960"
+                            )
+                elif port:
+                    print(f"✓ Browse agent vLLM server is accessible on port {port}")
+
+        print("\n=== Service Check Complete ===\n")
 
     def setup_components(
         self,
@@ -460,7 +559,6 @@ class AutoReasonSearchWorkflow(BaseWorkflow):
         self,
         problem: str,
         dataset_name: Optional[str] = None,
-        messages: Optional[List[Dict[str, str]]] = None,
         verbose: bool = True,
         search_callback: Optional[Any] = None,
         step_callback: Optional[Any] = None,
@@ -468,24 +566,8 @@ class AutoReasonSearchWorkflow(BaseWorkflow):
         cfg = self.configuration
         assert cfg is not None
 
-        # Extract history and problem from messages if provided
-        history = []
-        if messages:
-            # Find the last user message as the problem
-            last_user_idx = -1
-            for i in range(len(messages) - 1, -1, -1):
-                if messages[i]["role"] == "user":
-                    last_user_idx = i
-                    break
-
-            if last_user_idx != -1:
-                problem = messages[last_user_idx]["content"]
-                history = messages[:last_user_idx]
-            else:
-                # Fallback if no user message found (shouldn't happen ideally)
-                history = messages
-
         # import litellm
+
         # litellm._turn_on_debug()
 
         # Set the question for the browse agent
@@ -503,7 +585,6 @@ class AutoReasonSearchWorkflow(BaseWorkflow):
         results = await self.search_agent(
             question=problem,
             dataset_name=dataset_name,
-            history=history,
             max_tokens=cfg.search_agent_max_tokens,
             temperature=cfg.search_agent_temperature,
             max_tool_calls=cfg.search_agent_max_tool_calls,
