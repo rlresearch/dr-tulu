@@ -1,10 +1,12 @@
 import asyncio
+import atexit
 import inspect
 import json
 import logging
 import os
 import signal
 import subprocess
+import weakref
 from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import (
@@ -19,6 +21,16 @@ from typing import (
     TypeVar,
     Union,
 )
+
+# Global registry for cleanup at exit
+_active_workflows: "weakref.WeakSet[BaseWorkflow]" = weakref.WeakSet()
+
+
+@atexit.register
+def _cleanup_all_workflows():
+    for workflow in list(_active_workflows):
+        workflow.cleanup_launched_processes()
+
 
 import litellm
 import typer
@@ -188,16 +200,12 @@ class BaseWorkflow(ABC):
         """
         self.configuration = self._build_configuration(configuration, **overrides)
         self._launched_processes: List[subprocess.Popen] = []
+        _active_workflows.add(self)
 
         if not skip_service_check:
             self.before_launch_check()
 
         self.setup_components()
-
-    def __del__(self):
-        """Cleanup launched processes when workflow is destroyed."""
-        if hasattr(self, "_launched_processes"):
-            self.cleanup_launched_processes()
 
     # ---- Configuration helpers ----
 
