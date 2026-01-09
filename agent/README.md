@@ -64,7 +64,7 @@ Below we assume you are already in the `agent` directory.
 > If you run crawl4ai locally, you will need to install playwright and its dependencies.
 
 
-## Deepdive into the `serve` command: 
+## Deep Dive into the `serve` command: 
 
 The `serve` command can turn any workflow into a fastapi service with the following endpoints 
 
