@@ -486,6 +486,11 @@ class BaseWorkflow(ABC):
         # Handle worker-based data sharding
         dataset = self._shard_dataset_for_worker(dataset, **kwargs)
 
+        # Add the dataset name to the dataset items
+        if "dataset_name" not in dataset[0]:
+            for item in dataset:
+                item["dataset_name"] = dataset_config["name"]
+
         # Run some preprocessing on the dataset - filter fields based on __call__ signature
         call_sig = inspect.signature(self.__call__)
         call_params = set(call_sig.parameters.keys())
