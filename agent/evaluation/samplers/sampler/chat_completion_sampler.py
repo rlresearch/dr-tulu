@@ -23,8 +23,9 @@ class ChatCompletionSampler(SamplerBase):
         self,
         model: str = "gpt-3.5-turbo",
         system_message: str | None = None,
-        temperature: float = 0.5,
-        max_tokens: int = 4096,
+        temperature: float | None = 0.5,
+        max_tokens: int | None = 4096,
+        reasoning_effort: str | None = None,
     ):
         self.api_key_name = "OPENAI_API_KEY"
         if os.environ.get("AZURE_OPENAI_ENDPOINT"):
@@ -40,6 +41,7 @@ class ChatCompletionSampler(SamplerBase):
         self.system_message = system_message
         self.temperature = temperature
         self.max_tokens = max_tokens
+        self.reasoning_effort = reasoning_effort
         self.image_format = "url"
 
     def _handle_image(
@@ -71,14 +73,22 @@ class ChatCompletionSampler(SamplerBase):
         trial = 0
         while True:
             try:
+                completion_kwargs = {
+                    "model": self.model,
+                    "messages": message_list,
+                }
+                if self.max_tokens is not None:
+                    completion_kwargs["max_tokens"] = self.max_tokens
+                if self.temperature is not None:
+                    completion_kwargs["temperature"] = self.temperature
+                if self.reasoning_effort is not None:
+                    completion_kwargs["reasoning_effort"] = self.reasoning_effort
+
                 response = self.client.chat.completions.create(
-                    model=self.model,
-                    messages=message_list,
-                    temperature=self.temperature,
-                    max_tokens=self.max_tokens,
+                    **completion_kwargs,
                 )
                 content = response.choices[0].message.content
-                if content is None:
+                if content is None or not str(content).strip():
                     raise ValueError("OpenAI API returned empty response; retrying")
                 return SamplerResponse(
                     response_text=content,

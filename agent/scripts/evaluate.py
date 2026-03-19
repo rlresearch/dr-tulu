@@ -25,6 +25,10 @@ from dotenv import load_dotenv
 from samplers import common
 
 from evaluation.browse_comp_eval.browsecomp_eval import BrowseCompEval
+from evaluation.frontier_science_eval.frontierscience_eval import (
+    FrontierScienceOlympiadEval,
+    FrontierScienceResearchEval,
+)
 from evaluation.health_bench_eval.healthbench_eval import HealthBenchEval
 from evaluation.research_qa_eval.compute_coverage import compute_coverage
 from evaluation.research_qa_eval.researchqa_eval import ResearchQAEval
@@ -198,6 +202,9 @@ def run_evaluation(
     task_type,
     grader_model="gpt-4o-mini",
     debug=False,
+    reasoning_effort=None,
+    temperature=0,
+    max_tokens=1000,
 ):
     """Run evaluation on the specified JSONL file"""
 
@@ -218,8 +225,9 @@ def run_evaluation(
     grader_sampler = ChatCompletionSampler(
         model=grader_model,
         system_message=OPENAI_SYSTEM_MESSAGE_API,
-        max_tokens=1000,
-        temperature=0,
+        max_tokens=max_tokens,
+        temperature=temperature,
+        reasoning_effort=reasoning_effort,
     )
 
     # Run appropriate evaluation
@@ -235,6 +243,10 @@ def run_evaluation(
         eval_class = ShortFormQAEval(
             task=task, grader_model=grader_sampler, metric="judge"
         )
+    elif task == "frontierscience_olympiad":
+        eval_class = FrontierScienceOlympiadEval(grader_model=grader_sampler)
+    elif task == "frontierscience_research":
+        eval_class = FrontierScienceResearchEval(grader_model=grader_sampler)
     else:
         raise ValueError(f"Unsupported task type: {task}")
 
@@ -350,6 +362,21 @@ def main():
             args.run_mode,
             grader_model=args.grader_model,
             debug=args.debug,
+        )
+    elif args.task in ["frontierscience_olympiad", "frontierscience_research"]:
+        grader_model = args.grader_model
+        if grader_model == parser.get_default("grader_model"):
+            grader_model = "gpt-5"
+        run_evaluation(
+            args.file_path,
+            args.save_path,
+            args.task,
+            args.task_type,
+            grader_model,
+            args.debug,
+            reasoning_effort="high",
+            temperature=None,
+            max_tokens=None,
         )
     else:
         run_evaluation(

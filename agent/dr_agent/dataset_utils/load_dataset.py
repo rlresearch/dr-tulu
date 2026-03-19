@@ -17,6 +17,8 @@ SUPPORTED_TASKS = {
     "genetic_diseases_qa": "rl-research/genetic_diseases_qa",
     "deep_scholar_bench": "xinranz3/deepscholar_bench_fixed",
     "deep_research_bench": "rl-research/deep_research_bench_eval",
+    "frontierscience_olympiad": "openai/frontierscience",
+    "frontierscience_research": "openai/frontierscience",
     "sqav2": "allenai/asta-bench",
     "researchqa": "realliyifei/ResearchQA",
     "2wiki": "akariasai/2wiki_rand1k",
@@ -73,6 +75,8 @@ def get_ablation_sample_size(benchmark: str, subset_name: str = None) -> int:
         "researchqa": 100,
         "deep_scholar_bench": 63,
         "deep_research_bench": 100,
+        "frontierscience_olympiad": 50,
+        "frontierscience_research": 20,
         "sqav2": 100,
         "genetic_diseases_qa": 47,
         "2wiki": 100,
@@ -134,6 +138,13 @@ def load_dataset(config: DatasetConfig) -> List[Dict]:
         return load_deep_scholar_bench_data(num_examples)
     elif config["name"] == "deep_research_bench":
         return load_deep_research_bench_data(num_examples, shuffle)
+    elif config["name"] in ["frontierscience_olympiad", "frontierscience_research"]:
+        return load_frontierscience_data(
+            task_name=config["name"],
+            num_examples=num_examples,
+            shuffle=shuffle,
+            local_path=local_path,
+        )
     elif config["name"] == "sqav2":
         return load_sqav2_data(num_examples, shuffle)
     elif config["name"] == "genetic_diseases_qa":
@@ -465,6 +476,75 @@ def load_deep_research_bench_data(
                 "additional_instructions": "Please write a well structured, data-driven report on the given research question, and add citations when needed.",
             }
         )
+
+    if shuffle:
+        random.seed(42)
+        random.shuffle(examples)
+
+    if num_examples:
+        examples = examples[:num_examples]
+
+    return examples
+
+
+def load_frontierscience_data(
+    task_name: str,
+    num_examples: Optional[int] = None,
+    shuffle: bool = False,
+    local_path: Optional[str] = None,
+) -> List[Dict]:
+    frontierscience_data_files = {
+        "frontierscience_olympiad": "olympiad/test.jsonl",
+        "frontierscience_research": "research/test.jsonl",
+    }
+
+    if task_name not in frontierscience_data_files:
+        raise ValueError(f"Unsupported FrontierScience task: {task_name}")
+
+    if local_path and Path(local_path).exists():
+        dataset_path = Path(local_path)
+    else:
+        dataset_path = Path(
+            hf_hub_download(
+                repo_id=SUPPORTED_TASKS[task_name],
+                filename=frontierscience_data_files[task_name],
+                repo_type="dataset",
+            )
+        )
+
+    with dataset_path.open("r", encoding="utf-8") as f:
+        raw_examples = [json.loads(line) for line in f if line.strip()]
+
+    examples = []
+    seen_research_task_group_ids = {}
+    for sample in raw_examples:
+        problem = sample["problem"]
+        answer = sample["answer"]
+        if task_name == "frontierscience_olympiad":
+            task_group_id = sample["task_group_id"]
+            example = {
+                "id": task_group_id,
+                "problem": problem,
+                "answer": answer,
+                "additional_instructions": "",
+                "subject": sample.get("subject"),
+            }
+        else:
+            task_group_id = sample["task_group_id"]
+            previous_sample = seen_research_task_group_ids.get(task_group_id)
+            if previous_sample is not None:
+                continue # FrontierScience Research as of 03/18/26 has a dup task...
+
+            seen_research_task_group_ids[task_group_id] = sample
+            example = {
+                "id": task_group_id,
+                "problem": problem,
+                "answer": answer,
+                "additional_instructions": "",
+                "subject": sample.get("subject"),
+            }
+
+        examples.append(example)
 
     if shuffle:
         random.seed(42)
