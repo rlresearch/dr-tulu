@@ -129,11 +129,43 @@ This makes sense: DRB tests long-form research report writing where the RL model
 
 ---
 
-## Summary Across Benchmarks
+## Summary: v0 Rubric Generator (`stellalisy/rubric_generator_v0_0302`)
 
 | Benchmark | N | Mean Diff | Pairwise Acc | Acc @ margin>0.10 | Coverage @ margin>0.10 | Cohen's d | p-value |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | HealthBench | 936 | +0.027 | 60.2% | 67.9% | 28.3% | 0.204 | 2.20e-09 |
 | Deep Research Bench | 100 | +0.109 | 64.9% | 83.9% | 56.0% | 0.516 | 5.87e-06 |
 
-Both benchmarks show the generated rubrics + frozen judge can reliably distinguish RL from SFT, with the signal being substantially stronger on DRB (higher accuracy, larger effect size, and better coverage at high-margin thresholds).
+Both benchmarks show the generated rubrics + frozen judge can reliably distinguish RL from SFT, with the signal being substantially stronger on DRB.
+
+---
+
+## Rubric Generator Comparison (v3 prompt, Qwen3-1.7B frozen judge)
+
+Comparing three rubric generators using the v3 "dealbreaker" prompt template. All rubrics are scored by the same frozen `Qwen/Qwen3-1.7B` judge.
+
+### Setup
+
+- **Rubric generators**: `stellalisy/rubric-generator-8b-v3` (trained), `Qwen/Qwen3-8B` (base), `GPT-4.1` (API)
+- **Rubric prompt**: v3 template with dealbreaker criterion support (2-5 criteria, weights sum to 1.0)
+- **Judge model**: `Qwen/Qwen3-1.7B` frozen judge (temp=0.6, top_p=0.95)
+- **Models evaluated**: `rl-research/DR-Tulu-8B` (RL, step_4000) vs `rl-research/DR-Tulu-SFT-8B`
+
+### Results
+
+| Rubric Generator | Benchmark | N | RL Mean | SFT Mean | Diff | Pairwise Acc | Acc@0.10 | Cov@0.10 | Cohen's d | p-value |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| stellalisy/rubric-generator-8b-v3 | HealthBench | 940 | 0.910 | 0.890 | +0.020 | 0.587 | 0.610 | 25% | 0.120 | 8.1e-05 |
+| stellalisy/rubric-generator-8b-v3 | DRB | 100 | 0.891 | 0.837 | +0.054 | 0.598 | 0.732 | 41% | 0.295 | 5.2e-03 |
+| Qwen/Qwen3-8B | HealthBench | 940 | 0.906 | 0.898 | +0.008 | 0.541 | 0.560 | 23% | 0.051 | 6.3e-02 |
+| Qwen/Qwen3-8B | DRB | 100 | 0.876 | 0.815 | +0.060 | 0.614 | 0.738 | 42% | 0.340 | 1.4e-03 |
+| GPT-4.1 | HealthBench | 940 | 0.939 | 0.919 | +0.020 | 0.572 | 0.594 | 20% | 0.121 | 2.2e-03 |
+| GPT-4.1 | DRB | 100 | 0.891 | 0.834 | +0.058 | 0.602 | 0.714 | 42% | 0.294 | 1.1e-02 |
+
+### Takeaway
+
+- **All three rubric generators** can distinguish RL from SFT on both benchmarks (all p < 0.05 except Qwen3-8B on HealthBench at p=0.063)
+- **DRB is more discriminative** than HealthBench across all generators (higher accuracy, larger effect sizes)
+- **Trained model (rubric-generator-8b-v3) vs baselines**: On HealthBench, the trained model shows similar performance to GPT-4.1 (0.587 vs 0.572 pairwise acc) and outperforms Qwen3-8B (0.541). On DRB, all three are comparable (~0.60 pairwise acc), though Qwen3-8B shows slightly better margin-based accuracy (0.738 vs 0.732 vs 0.714 at margin>0.10)
+- **Qwen3-8B struggles on HealthBench** (p=0.063, not significant) but performs well on DRB, suggesting medical domain specificity matters
+- The frozen 1.7B judge is a bottleneck: all generators produce similar pairwise accuracy, suggesting the judge's discriminative capacity — not the rubric quality — is the limiting factor

@@ -40,13 +40,36 @@ Then generate a rubric of 5-10 criteria following these rules:
 2. Semantic objectivity: write criteria based only on the question, without assuming any specific answer.
 3. All weights must sum to exactly 1.0, reflecting each criterion's importance.
 
-For each criterion, define scoring levels from 0.0 to 1.0. At minimum include 1.0 and 0.0, and add intermediate levels (e.g., 0.5, 0.3, 0.8) wherever useful for distinguishing answer quality. A judge will score each criterion and multiply by the weight to produce a total score.
+For each criterion should be described in a sentence, define scoring levels from 0.0 to 1.0. At minimum include 1.0 and 0.0, and add intermediate levels (e.g., 0.5, 0.3, 0.8) wherever useful for distinguishing answer quality. A judge will score each criterion and multiply by the weight to produce a total score.
 
 Output ONLY valid JSON in this format:
-{"criteria": [{"criterion": "<what this criterion measures>", "weight": <float>, "scoring_levels": {"1.0": "<description>", "0.5": "<description>", "0.0": "<description>"}}, ...]}
+{"criteria": [{"criterion": "<a sentence of what this criterion measures>", "weight": <float>, "scoring_levels": {"1.0": "<description>", "0.5": "<description>", "0.0": "<description>"}}, {"criterion": ...}, ...]}
 
 Example — question: "Explain how photosynthesis works in simple terms"
 {"criteria": [{"criterion": "Explains that plants convert sunlight into chemical energy", "weight": 0.3, "scoring_levels": {"1.0": "Clearly explains the sunlight-to-energy conversion", "0.5": "Mentions sunlight or energy but not the conversion process", "0.0": "No mention of the energy conversion mechanism"}}, {"criterion": "Identifies CO2 and water as inputs and oxygen and glucose as outputs", "weight": 0.25, "scoring_levels": {"1.0": "All four substances correctly identified", "0.5": "Some inputs or outputs mentioned but incomplete", "0.0": "None identified or incorrect"}}, {"criterion": "Avoids unnecessary jargon and is understandable to a general audience", "weight": 0.2, "scoring_levels": {"1.0": "Clear and jargon-free throughout", "0.5": "Mostly accessible but uses some unexplained technical terms", "0.0": "Dense with jargon, inaccessible to a general reader"}}, {"criterion": "Follows a coherent structure from inputs to process to outputs", "weight": 0.15, "scoring_levels": {"1.0": "Well-organized with clear progression", "0.5": "Some structure but jumps between ideas", "0.0": "Disorganized or incoherent"}}, {"criterion": "All stated facts about photosynthesis are correct", "weight": 0.1, "scoring_levels": {"1.0": "No factual errors", "0.5": "Minor inaccuracy that does not undermine the explanation", "0.0": "Contains significant factual errors"}}]}"""
+
+
+V3_RUBRIC_GENERATION_SYSTEM_PROMPT = """You are an expert evaluator generating rubrics to assess answers to questions.
+
+Given a question, first analyze it to identify:
+- First identify the most important aspect of the question that the answer should satisfy, this will be used to form the Dealbreaker criterion (explained later).
+- Explicit requirements: directly stated constraints, formatting rules, or content directives (e.g., "list three reasons", "write in Python", "under 100 words")
+- Implicit requirements: unstated but necessary qualities inferred from context (e.g., explaining "blockchain to grandparents" implicitly requires avoiding jargon, even if not explicitly forbidden)
+
+Then generate a rubric of 2-5 criteria following these rules:
+1. Structural atomicity: each criterion targets exactly one aspect. Do not combine multiple conditions into one criterion.
+2. Semantic objectivity: write criteria based only on the question, without assuming any specific answer.
+3. All weights must sum to exactly 1.0, reflecting each criterion's importance, important criteria such as accuracy should have higher weight.
+4. Dealbreaker criterion: some criteria are so important that if the answer does not satisfy them, the answer is just not good enough. For example, for questions with verifiable short form answers or multiple choice (such as math or factuality), the dealbreaker criterion should be "the answer is equivalent to XXX (e.g. 100)". A Dealbreaker criterion should have very high weight such as 0.8. But form explanation based or questions requiring long form answers, accuracy should not have such a high weight because it's too general and it will be hard for the judge to assess accuracy. It's fine if there's no dealbreaker.
+
+For each criterion should be described in a sentence, define scoring levels from 0.0 to 1.0. At minimum include 1.0 and 0.0, and add intermediate levels (e.g., 0.5, 0.3, 0.8) wherever useful for distinguishing answer quality. A judge will score each criterion and multiply by the weight to produce a total score.
+
+Output ONLY valid JSON in this format:
+{"criteria": [{"criterion": "<a sentence of what this criterion measures>", "weight": <float>, "scoring_levels": {"1.0": "<description>", "0.5": "<description>", "0.0": "<description>"}}, {"criterion": ...}, ...]}
+
+Example — question: "Explain how photosynthesis works in simple terms"
+{"criteria": [{"criterion": "Explains that plants convert sunlight into chemical energy", "weight": 0.3, "scoring_levels": {"1.0": "Clearly explains the sunlight-to-energy conversion", "0.7": "Mentions sunlight or energy but not the conversion process", "0.3": "Vague reference to energy without clear connection to sunlight", "0.0": "No mention of the energy conversion mechanism"}}, {"criterion": "Identifies CO2 and water as inputs and oxygen and glucose as outputs", "weight": 0.25, "scoring_levels": {"1.0": "All four substances correctly identified", "0.6": "Three substances correctly identified", "0.3": "Some inputs or outputs mentioned but incomplete", "0.0": "None identified or incorrect"}}, {"criterion": "Avoids unnecessary jargon and is understandable to a general audience", "weight": 0.2, "scoring_levels": {"1.0": "Clear and jargon-free throughout", "0.8": "Mostly accessible with minimal technical terms that are explained", "0.4": "Mostly accessible but uses some unexplained technical terms", "0.0": "Dense with jargon, inaccessible to a general reader"}}, {"criterion": "Follows a coherent structure from inputs to process to outputs", "weight": 0.15, "scoring_levels": {"1.0": "Well-organized with clear progression", "0.6": "Generally structured but minor organizational issues", "0.2": "Some structure but jumps between ideas", "0.0": "Disorganized or incoherent"}}, {"criterion": "All stated facts about photosynthesis are correct", "weight": 0.1, "scoring_levels": {"1.0": "No factual errors", "0.8": "Minor inaccuracy that does not undermine the explanation", "0.0": "Contains significant factual errors"}}]}"""
+
 
 CORRECTNESS_FOCUSED_RUBRIC_GENERATION_SYSTEM_PROMPT = """You are an expert evaluator. Given a question, describe what makes a correct and complete answer.
 
@@ -64,6 +87,85 @@ DEFAULT_BINARY_JUDGE_SYSTEM_PROMPT = (
     "You are a judge, evaluating whether a response satisfies the given rubric. "
     "If the response satisfies the criterion of the rubric, output YES; otherwise output NO."
 )
+DEFAULT_RLCER_VERIFIER_SYSTEM_PROMPT = (
+    "You are an expert in evaluating student responses to math problems. "
+    "Your task is to assess a given response based on a set of binary rubrics and compute a final score."
+)
+
+
+def _binary_judge_messages(content: dict[str, Any]) -> list[dict[str, str]]:
+    return [
+        {"role": "system", "content": DEFAULT_BINARY_JUDGE_SYSTEM_PROMPT},
+        {
+            "role": "user",
+            "content": f"""Requirement:
+- You must follow the rubric strictly, and only consider the criteria listed in the rubric.
+- You must NOT consider any other factors, such as your own opinions or external knowledge.
+
+Below between <RESPONSE> and </RESPONSE> is the response to evaluate:
+<RESPONSE>{content["answer"]}</RESPONSE>
+
+Below between <RUBRIC> and </RUBRIC> is the rubric to evaluate on:
+<RUBRIC>{content["rubric"]}</RUBRIC>
+
+Output STRICTLY in below format. No other text is allowed:
+<EVALUATION> YES/NO </EVALUATION>""",
+        },
+    ]
+
+
+def _rlcer_verifier_messages(content: dict[str, Any]) -> list[dict[str, str]]:
+    return [
+        {"role": "system", "content": DEFAULT_RLCER_VERIFIER_SYSTEM_PROMPT},
+        {
+            "role": "user",
+            "content": f"""[Task Input]:
+- Question: The math problem the student is solving.
+- Response: The student's step-by-step solution.
+- Rubrics: A list of criteria for evaluation. Each criterion has:
+  - category: The aspect of reasoning being assessed.
+  - criterion: A binary statement (either a merit to reward or a flaw to penalize).
+  - points: The points assigned (positive for rewards, negative for penalties).
+
+[Task Instruction]:
+Evaluate each criterion:
+- For each criterion in the rubrics list (in the given order), determine if the criterion is satisfied by the response.
+  - Output True if the criterion is met (for a reward) or if the flaw is present (for a penalty).
+  - Output False otherwise.
+- Base your judgement solely on the content of the response and the specific wording of the criterion.
+- Compute the final score: Sum the points of every criterion that is evaluated as True (this includes both positive and negative points).
+
+[Output Format]
+Return a JSON object with the following structure:
+```json
+{{
+  "judgement": [boolean, boolean, ...],
+  "final_score": number
+}}
+```
+
+[Important Guidelines]
+- Be objective: Do not consider any external knowledge beyond the provided question, response, and rubrics.
+- Binary decision: Each criterion must be evaluated as strictly True or False. There are no partial credits.
+- Order matters: The judgement list must exactly match the order of the rubrics provided.
+- Independent evaluation: Assess each criterion separately. The presence or absence of one flaw/merit does not influence the evaluation of others unless the criterion explicitly references another.
+- Penalty criteria: For a criterion with negative points, True means the flaw is present and the negative points are added. False means the flaw is absent.
+- Reward criteria: For a criterion with positive points, True means the merit is present and the positive points are added. False means the merit is absent.
+
+Now, proceed to evaluate the following:
+
+Question:
+{content["question"]}
+
+Response:
+{content["answer"]}
+
+Rubrics:
+{content["rubrics"]}
+
+Your final output should contain only the JSON object. Do not include any additional text or explanations.""",
+        },
+    ]
 
 
 DEFAULT_BASELINE_SYSTEM_PROMPT = (
@@ -131,6 +233,10 @@ MESSAGE_FORMATTER_REGISTRY: dict[str, Callable[[dict[str, Any]], list[dict[str, 
     ],
     "rubric_generation": lambda content: [
         {"role": "system", "content": DEFAULT_RUBRIC_GENERATION_SYSTEM_PROMPT},
+        {"role": "user", "content": content["question"]},
+    ],
+    "rubric_generation_v3": lambda content: [
+        {"role": "system", "content": V3_RUBRIC_GENERATION_SYSTEM_PROMPT},
         {"role": "user", "content": content["question"]},
     ],
     "rubric_generation_correctness": lambda content: [
@@ -201,24 +307,8 @@ Example 2 (rubric: Correctness of Solution 0.5, Use of Examples 0.3, Appropriate
 Your evaluation:""",
         },
     ],
-    "judge_binary": lambda content: [
-        {"role": "system", "content": DEFAULT_BINARY_JUDGE_SYSTEM_PROMPT},
-        {
-            "role": "user",
-            "content": f"""Requirement:
-- You must follow the rubric strictly, and only consider the criteria listed in the rubric.
-- You must NOT consider any other factors, such as your own opinions or external knowledge.
-
-Below between <RESPONSE> and </RESPONSE> is the response to evaluate:
-<RESPONSE>{content["answer"]}</RESPONSE>
-
-Below between <RUBRIC> and </RUBRIC> is the rubric to evaluate on:
-<RUBRIC>{content["rubric"]}</RUBRIC>
-
-Output STRICTLY in below format. No other text is allowed:
-<EVALUATION> YES/NO </EVALUATION>""",
-        },
-    ],
+    "judge_binary": _binary_judge_messages,
+    "rlcer_verifier": _rlcer_verifier_messages,
     "rrd_initial_rubric_generation": lambda content: [
         {"role": "system", "content": DEFAULT_RRD_RUBRIC_SYSTEM_PROMPT},
         {
@@ -448,6 +538,54 @@ Output JSON only:
             ),
         },
     ],
+    "rar_rubric_generation": lambda content: [
+        {
+            "role": "user",
+            "content": f"""You are an expert rubric writer. Your job is to generate a self-contained set of evaluation criteria ("rubrics") for judging how good a response is to a given question.
+
+Rubrics can cover aspects such as factual correctness, instruction following, reasoning quality, completeness, clarity, helpfulness, safety, style, and common pitfalls. Each rubric item must be self-contained so that a judge can apply it without relying on external knowledge beyond the prompt and the rubric item itself.
+
+Inputs:
+- question: The full question text.
+- sample_responses: Example candidate responses for this prompt. These are only grounding examples of likely strengths and failure modes. Do NOT copy them, and do NOT let them over-constrain the rubric.
+
+Question:
+{content["question"]}
+
+Sample responses:
+{_format_rrd_responses(content["responses"])}
+
+Total items:
+- Choose 7-20 rubric items depending on prompt complexity.
+
+Each rubric item must include exactly three keys:
+1. title (2-4 words)
+2. description: One sentence beginning with its category prefix, explicitly stating what to look for.
+3. weight: For Essential/Important/Optional, use 1-5 (5 = most important). For Pitfall, use -1 or -2.
+
+Allowed category prefixes:
+- Essential Criteria:
+- Important Criteria:
+- Optional Criteria:
+- Pitfall Criteria:
+
+Category guidance:
+- Essential: Critical requirements, core facts, or major instruction-following constraints. Missing these should strongly hurt quality.
+- Important: Key reasoning, completeness, clarity, or usefulness factors that strongly affect answer quality.
+- Optional: Helpful style, extra depth, or polish that improves the response but is not strictly required.
+- Pitfall: Common mistakes, omissions, unsafe advice, or instruction violations that should count against the response.
+
+Format notes:
+- Make the rubric prompt-specific, but general enough to apply to multiple different valid answers.
+- Each item must evaluate one distinct aspect only.
+- Avoid domain-specific assumptions unless the question itself requires them.
+- Do not copy large blocks from the question or sample responses.
+- Prefer criteria that can be judged from the response itself.
+
+Output:
+Return a JSON array of rubric objects. Each object must contain exactly three keys: title, description, and weight. Do not include any extra text before or after the JSON array.""",
+        }
+    ],
     "baseline": lambda content: [
         {"role": "system", "content": content.get("system_prompt", DEFAULT_BASELINE_SYSTEM_PROMPT)},
         {
@@ -483,33 +621,85 @@ When answering, follow this rubric to ensure a high-quality response:
         {
             "role": "system",
             "content": (
-                "You are an expert rubric designer that creates evaluation rubrics for assessing "
-                "reasoning quality. Each rubric item has an importance score (positive for merits, "
-                "negative for flaws). Output valid JSON only."
+                "You are an expert in educational assessment and rubric design. "
+                "Your task is to analyze a given question-answer pair and generate comprehensive "
+                "evaluation rubrics that can be used to assess response quality for this question. "
+                "The answer is only a reference answer from the student (not necessarily a good "
+                "response), so your rubric system should consider the merits already presented in "
+                "the response, and most importantly, room for further improvements. "
+                "Output valid JSON only."
             ),
         },
         {
             "role": "user",
-            "content": f"""Design a rubric for evaluating responses to the following question.
+            "content": f"""# Input Data
 
-Question: {content["question"]}
+[Question]:
+{content["question"]}
 
-Here are sample responses for context:
-{_format_rrd_responses(content["responses"])}
+[Response]:
+{content["response"]}
 
-Create 5-15 evaluation criteria. Each criterion should target a specific, measurable aspect of reasoning quality.
-- Positive scores (1-5): reward merits like correct reasoning steps, thorough analysis, clear explanations.
-- Negative scores (-1 to -5): penalize flaws like logical errors, missing steps, incorrect conclusions.
+# Task Instructions
 
-Output STRICTLY as a JSON object with this structure:
+Based on the provided question and answer, generate a comprehensive rubric that's suitable with multiple evaluation criteria. Each criterion should be:
+1. Specific and Measurable: Clearly define what constitutes meeting or not meeting the criterion
+2. Binary Evaluable: Can be assessed as true/false by an LLM evaluator
+3. Comprehensive Coverage: Together, all criteria should cover the key aspects of a high-quality response
+
+# Required Rubric Categories
+
+Generate criteria to cover these aspects:
+1. Effectiveness of Problem Decomposition & Planning
+Definition: The systematic breakdown of a complex problem into logically ordered, manageable sub-tasks, and the formulation of a strategic roadmap for solving them.
+Core Aspects: Identifying key components, establishing step dependencies, sequencing operations, and anticipating challenges before execution.
+
+2. Effectiveness of BackTracking / Self-Validation / Error Handling
+Definition: The continuous monitoring of reasoning validity through consistency checks, proactive error detection, and adaptive revision of flawed steps.
+Core Aspects: Implementing verification checkpoints (e.g., unit analysis/estimation), diagnosing inconsistencies, recovering from dead ends via path correction (not restarting), and mitigating error propagation.
+
+3. Reasoning Clarity & Flow
+Definition: The coherent structuring and communication of logical progression where each step explicitly follows from prior conclusions and leads to subsequent insights.
+Core Aspects: Hierarchical argument organization under clear objective, unambiguous terminology, explicit logical connectors (e.g., "thus," "since," "conversely"), and seamless transitions between ideas.
+
+4. Reasoning Focus & Efficiency
+Definition: The maintenance of strict alignment with problem objectives while optimizing cognitive resources through elimination of redundancies and irrelevant explorations.
+Core Aspects: Sustained direction toward core goals, pruning of tangential paths, and avoidance of overthinking/repetition during reasoning.
+
+5. Other Question-Specific Aspects
+Definition: The strategic selection and application of domain-relevant methods that align with both problem constraints and solution goals.
+Core Aspects: Leveraging context-optimal approaches (e.g., dimensional analysis in physics, elimination methods for multiple-choice), avoiding technique mismatches, and adapting tools to exploit problem structure (e.g., symmetry in geometry).
+
+# Output Format
+
+Return a JSON object with this structure:
 ```json
 {{
+  "question_domain": "math/calculus",
   "rubrics": [
-    {{"criterion": "clear, specific evaluation criterion text", "points": <integer score>}},
+    {{
+      "category": "Effectiveness of Problem Decomposition & Planning",
+      "criterion": "clear, specific evaluation criterion text",
+      "points": <integer score>
+    }},
     ...
-  ]
+  ],
+  "maximum_score": <sum of all positive points>,
+  "minimum_score": <sum of all negative points>,
+  "current_score": <score assigned to the reference response>
 }}
-```""",
+```
+
+# Important Guidelines
+
+- Output 5-15 criteria in total, ensuring comprehensive coverage.
+- Points should reflect the relative importance of each criterion.
+- Positive points (1 to 5) should reward merits in the reasoning process.
+- Negative points (-5 to -1) should penalize flaws in the reasoning process.
+- Try to make your rubrics specific to the question, but not so detailed as some of the overly detailed metrics may not apply to all the response.
+- Do not let the reference answer constrain your rubric system.
+- The reference response should score strictly below the average of the proposed rubric system so the rubric leaves room for improvement.
+- Return only the JSON object without additional commentary.""",
         },
     ],
     "rubric_arm_rubric_generation": lambda content: [
@@ -626,7 +816,7 @@ def format_messages(
     Format messages using the registry-based system.
 
     Args:
-        message_type: Type of message to format. Must be one of: "policy", "rubric_generation", "rubric_generation_v0", "rubric_generation_with_examples", "judge", "judge_v1", "judge_binary", "rrd_initial_rubric_generation", "rrd_rubric_decomposition", "rrd_overlap_check", "rrd_conflict_check", "rrd_weight_assignment", "direct_likert", "reference_likert", "rar_implicit", "baseline", "question_inference", "policy_with_rubric", "rlcer_rubric_generation", "judge_likert_per_item", "rubric_arm_rubric_generation", "rubric_arm_judge_pairwise"
+        message_type: Type of message to format. Must be one of: "policy", "rubric_generation", "rubric_generation_v0", "rubric_generation_v3", "rubric_generation_with_examples", "judge", "judge_v1", "judge_binary", "rlcer_verifier", "rrd_initial_rubric_generation", "rrd_rubric_decomposition", "rrd_overlap_check", "rrd_conflict_check", "rrd_weight_assignment", "direct_likert", "reference_likert", "rar_implicit", "rar_rubric_generation", "baseline", "question_inference", "policy_with_rubric", "rlcer_rubric_generation", "judge_likert_per_item", "rubric_arm_rubric_generation", "rubric_arm_judge_pairwise"
         content: Dictionary containing the content for the message type:
             - "policy": {"question": str}
             - "rubric_generation": {"question": str}
@@ -636,6 +826,7 @@ def format_messages(
             - "judge": {"question": str, "rubric": str, "answer": str}
             - "judge_v1": {"question": str, "rubric": str, "answer": str}  (pre-2026-03-04, kept for reproducibility)
             - "judge_binary": {"question": str, "rubric": str, "answer": str}
+            - "rlcer_verifier": {"question": str, "answer": str, "rubrics": list[dict[str, Any]]}
             - "rrd_initial_rubric_generation": {"question": str, "responses": list[str]}
             - "rrd_rubric_decomposition": {"question": str, "responses": list[str], "current_rubric": str, "other_rubrics": list[str]}
             - "rrd_overlap_check": {"existing_rubrics": list[str], "new_rubric": str}
@@ -644,10 +835,11 @@ def format_messages(
             - "direct_likert": {"question": str, "answer": str}
             - "reference_likert": {"question": str, "answer": str, "reference_answer": str}
             - "rar_implicit": {"question": str, "answer": str, "rubric": str}
+            - "rar_rubric_generation": {"question": str, "responses": list[str]}
             - "baseline": {"question": str, "system_prompt": Optional[str]} (system_prompt defaults to DEFAULT_BASELINE_SYSTEM_PROMPT)
             - "question_inference": {"answer": str}
             - "policy_with_rubric": {"question": str, "rubric": str}
-            - "rlcer_rubric_generation": {"question": str, "responses": list[str]}
+            - "rlcer_rubric_generation": {"question": str, "response": str}
             - "judge_likert_per_item": {"answer": str, "rubric": str}
             - "rubric_arm_rubric_generation": {"question": str}
             - "rubric_arm_judge_pairwise": {"instruction": str, "rubric": str, "response_a": str, "response_b": str}
@@ -693,3 +885,35 @@ def format_messages(
             return token_ids
 
     return messages
+
+
+# Mapping from rubric prompt keys to their system prompt constants.
+# Used by training scripts to resolve --rubric_prompt_key into the actual
+# system prompt string for dataset tokenization and inference consistency.
+RUBRIC_PROMPT_KEY_TO_SYSTEM_PROMPT: dict[str, str] = {
+    "rubric_generation": DEFAULT_RUBRIC_GENERATION_SYSTEM_PROMPT,
+    "rubric_generation_v0": V0_RUBRIC_GENERATION_SYSTEM_PROMPT,
+    "rubric_generation_v3": V3_RUBRIC_GENERATION_SYSTEM_PROMPT,
+    "rubric_generation_correctness": CORRECTNESS_FOCUSED_RUBRIC_GENERATION_SYSTEM_PROMPT,
+}
+
+
+def get_rubric_system_prompt(prompt_key: str) -> str:
+    """Get the rubric generation system prompt for a given registry key.
+
+    Args:
+        prompt_key: A key from MESSAGE_FORMATTER_REGISTRY that corresponds to a
+            rubric generation prompt (e.g. "rubric_generation", "rubric_generation_v3").
+
+    Returns:
+        The system prompt string.
+
+    Raises:
+        ValueError: If the prompt_key is not a known rubric generation key.
+    """
+    if prompt_key not in RUBRIC_PROMPT_KEY_TO_SYSTEM_PROMPT:
+        raise ValueError(
+            f"Unknown rubric prompt key '{prompt_key}'. "
+            f"Available: {list(RUBRIC_PROMPT_KEY_TO_SYSTEM_PROMPT.keys())}"
+        )
+    return RUBRIC_PROMPT_KEY_TO_SYSTEM_PROMPT[prompt_key]
