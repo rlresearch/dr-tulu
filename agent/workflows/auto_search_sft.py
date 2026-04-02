@@ -35,6 +35,50 @@ from rich.table import Table
 dotenv.load_dotenv(Path(__file__).parent.parent.parent / ".env")
 
 
+def _extract_balanced_braced_content(text: str, marker: str) -> Optional[str]:
+    start = text.find(marker)
+    if start == -1:
+        return None
+
+    cursor = start + len(marker)
+    depth = 1
+    collected_chars: list[str] = []
+
+    while cursor < len(text):
+        char = text[cursor]
+
+        if char == "{":
+            depth += 1
+            collected_chars.append(char)
+        elif char == "}":
+            depth -= 1
+            if depth == 0:
+                return "".join(collected_chars).strip()
+            collected_chars.append(char)
+        else:
+            collected_chars.append(char)
+
+        cursor += 1
+
+    return "".join(collected_chars).strip()
+
+
+def _extract_final_answer(output_string: str) -> str:
+    if "</think>" in output_string:
+        output_string = "".join(output_string.split("</think>")[1:]).strip()
+
+    if "<answer>" in output_string:
+        output_string = (
+            output_string.split("<answer>", 1)[1].split("</answer>", 1)[0].strip()
+        )
+
+    boxed_content = _extract_balanced_braced_content(output_string, r"\boxed{")
+    if boxed_content is not None:
+        return boxed_content
+
+    return output_string
+
+
 @dataclass
 class WebPageReaderAgentV2(BaseAgent):
     question: Optional[str] = None
@@ -100,9 +144,14 @@ class SearchAgent(BaseAgent):
             "webwalker",
             "hle",
             "dsqa",
+            "frontierscience_olympiad",
         ]:
             instruction_field_name = "exact_answer"
-        elif dataset_name in ["sqav2", "genetic_diseases_qa"]:
+        elif dataset_name in [
+            "sqav2",
+            "genetic_diseases_qa",
+            "frontierscience_research",
+        ]:
             instruction_field_name = "long_form"
         elif dataset_name in ["healthbench", "deep_research_bench", "researchqa"]:
             instruction_field_name = "short_form"
@@ -150,22 +199,7 @@ class SearchAgent(BaseAgent):
         return messages
 
     def postprocess_output(self, result: Dict[str, Any]) -> str:
-        output_string = result.generated_text
-        if "</think>" in output_string:
-            output_string = "".join(output_string.split("</think>")[1:]).strip()
-
-        if "<answer>" in output_string:
-            output_string = (
-                output_string.split("<answer>")[1].split("</answer>")[0].strip()
-            )
-
-        # Replace the "\boxed{" with "\\boxed{"
-        output_string = output_string.replace("\boxed{", "\\boxed{")
-
-        if "\\boxed{" in output_string:
-            output_string = output_string.split("\\boxed{")[1].split("}")[0].strip()
-
-        return output_string
+        return _extract_final_answer(result.generated_text)
 
 
 @dataclass
@@ -183,9 +217,14 @@ class AnswerAgent(BaseAgent):
             "bc_synthetic_varied_depth_o3_verified",
             "webwalker",
             "webshaper",
+            "frontierscience_olympiad",
         ]:
             instruction_field_name = "exact_answer"
-        elif dataset_name in ["sqav2", "genetic_diseases_qa"]:
+        elif dataset_name in [
+            "sqav2",
+            "genetic_diseases_qa",
+            "frontierscience_research",
+        ]:
             instruction_field_name = "long_form"
         elif dataset_name in ["healthbench", "deep_research_bench", "researchqa"]:
             instruction_field_name = "short_form"
@@ -214,22 +253,7 @@ class AnswerAgent(BaseAgent):
         ]
 
     def postprocess_output(self, result: Dict[str, Any]) -> str:
-        output_string = result.generated_text
-        if "</think>" in output_string:
-            output_string = "".join(output_string.split("</think>")[1:]).strip()
-
-        if "<answer>" in output_string:
-            output_string = (
-                output_string.split("<answer>")[1].split("</answer>")[0].strip()
-            )
-
-        # Replace the "\boxed{" with "\\boxed{"
-        output_string = output_string.replace("\boxed{", "\\boxed{")
-
-        if "\\boxed{" in output_string:
-            output_string = output_string.split("\\boxed{")[1].split("}")[0].strip()
-
-        return output_string
+        return _extract_final_answer(result.generated_text)
 
 
 class NoBrowseTool(BaseTool):
