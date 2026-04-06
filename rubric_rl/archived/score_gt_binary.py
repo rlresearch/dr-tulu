@@ -1,18 +1,9 @@
 #!/usr/bin/env python3
-"""
-Score rollouts against expert rubrics using GPT-4.1 with binary per-criterion grading.
-
-For each criterion in the rubric, asks GPT-4.1 whether the criterion is met (true/false).
-The final score is the weighted sum of met criteria divided by total weight.
-
-Usage:
-    python score_gt_binary.py \
-        --rollouts /path/to/rollouts.jsonl \
-        --rubrics /path/to/gt_rubrics.jsonl \
-        --output /path/to/scores.json
-"""
+"""Score rollouts against GT expert rubrics using GPT-4.1 with binary per-criterion grading.
+Same method as HealthBench: for each criterion, ask if met (true/false), sum weights."""
 import argparse
 import json
+import os
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
@@ -61,7 +52,7 @@ def score_one(question, answer, rubric_json, client, model):
                 text = resp.choices[0].message.content
                 js, je = text.find("{"), text.rfind("}")
                 if js != -1 and je != -1:
-                    result = json.loads(text[js:je + 1])
+                    result = json.loads(text[js:je+1])
                     if "criteria_met" in result and isinstance(result["criteria_met"], bool):
                         if w > 0:
                             total_weight += w
@@ -72,7 +63,7 @@ def score_one(question, answer, rubric_json, client, model):
                             if not result["criteria_met"]:
                                 achieved += abs(w)
                         break
-            except Exception:
+            except Exception as e:
                 pass
 
     if total_weight == 0:
@@ -83,7 +74,7 @@ def score_one(question, answer, rubric_json, client, model):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--rollouts", required=True)
-    parser.add_argument("--rubrics", required=True, help="GT rubrics in JSONL format (prompt_id, generated_rubric)")
+    parser.add_argument("--rubrics", required=True)
     parser.add_argument("--output", required=True)
     parser.add_argument("--model", default="gpt-4.1")
     parser.add_argument("--max-workers", type=int, default=20)
@@ -95,7 +86,10 @@ def main():
         content = f.read().strip()
         rollouts = json.loads(content) if content.startswith("[") else [json.loads(l) for l in content.split("\n") if l.strip()]
 
-    rollout_map = {str(r.get("example_id", r.get("original_data", {}).get("prompt_id", ""))): r for r in rollouts}
+    rollout_map = {}
+    for r in rollouts:
+        pid = str(r.get("example_id", r.get("original_data", {}).get("prompt_id", "")))
+        rollout_map[pid] = r
 
     with open(args.rubrics) as f:
         rubrics = {r["prompt_id"]: r for r in (json.loads(l) for l in f)}
@@ -104,7 +98,6 @@ def main():
     print(f"Matched {len(overlap)} examples")
 
     results = {}
-
     def _do(pid):
         r = rollout_map[pid]
         rb = rubrics[pid]
