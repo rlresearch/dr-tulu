@@ -11,9 +11,12 @@ def get_snippets_for_query(query: str, number_of_results=10) -> List[str]:
     Retrieves the first snippet from a web search API for the given query.
     Raises a ValueError if the API key is missing.
     """
-    api_key = os.environ.get("YOUCOM_API_KEY")
+    # YDC_API_KEY is You.com's canonical env var; YOUCOM_API_KEY kept as fallback.
+    api_key = os.environ.get("YDC_API_KEY") or os.environ.get("YOUCOM_API_KEY")
     if not api_key:
-        raise ValueError("Missing YOUCOM_API_KEY environment variable.")
+        raise ValueError(
+            "Missing YDC_API_KEY (or legacy YOUCOM_API_KEY) environment variable."
+        )
 
     session = create_session_with_retries()
 
