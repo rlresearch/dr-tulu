@@ -6,6 +6,16 @@ from pydantic import BaseModel, Field
 # Type alias for dictionary-based tool inputs
 ToolInput = Dict[str, Any]
 
+#: Format tools use to label the documents they return, so that the model can
+#: refer back to them with `<cite id=...>`.  See `dr_agent.citations` for
+#: resolving those ids back to the documents.
+SNIPPET_ID_TEMPLATE = "{call_id}-{index}"
+
+
+def make_snippet_id(call_id: str, index: int) -> str:
+    """Build the id labelling the `index`-th document returned by a tool call."""
+    return SNIPPET_ID_TEMPLATE.format(call_id=call_id, index=index)
+
 
 class ToolOutput(BaseModel):
     """Output from a tool execution"""

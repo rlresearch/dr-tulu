@@ -2,6 +2,18 @@ __version__ = "0.1.2.post1"
 
 # Main library components
 from .agent_interface import BaseAgent
+from .citations import (
+    Citation,
+    ResolvedCitation,
+    build_snippet_index,
+    collect_sources,
+    format_answer_with_references,
+    format_bibliography,
+    parse_citations,
+    parse_snippets_from_trace,
+    resolve_citations,
+    strip_citation_tags,
+)
 from .client import GenerateWithToolsOutput, GenerationConfig, LLMToolClient
 
 # Shared prompts
@@ -54,6 +66,17 @@ __all__ = [
     # Tool interface - Parsing
     "ToolCallInfo",
     "ToolCallParser",
+    # Citations
+    "Citation",
+    "ResolvedCitation",
+    "build_snippet_index",
+    "parse_citations",
+    "parse_snippets_from_trace",
+    "resolve_citations",
+    "collect_sources",
+    "format_bibliography",
+    "format_answer_with_references",
+    "strip_citation_tags",
     # Prompts
     "UNIFIED_TOOL_CALLING_PROMPTS",
 ]

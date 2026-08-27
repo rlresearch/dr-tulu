@@ -23,7 +23,13 @@ from tenacity import (
 )
 
 from .base import BaseTool
-from .data_types import Document, DocumentToolOutput, ToolInput, ToolOutput
+from .data_types import (
+    Document,
+    DocumentToolOutput,
+    ToolInput,
+    ToolOutput,
+    make_snippet_id,
+)
 from .tool_parsers import LegacyToolCallParser, ToolCallInfo, ToolCallParser
 from .utils import extract_snippet_with_context
 
@@ -603,7 +609,8 @@ class MCPSearchTool(MCPMixin, BaseTool, ABC):
                 combined_snippet_text = []
                 for index, doc in enumerate(output.documents):
                     combined_snippet_text.append(
-                        f"<snippet id={output.call_id}-{index}>\n{doc.stringify()}\n</snippet>"
+                        f"<snippet id={make_snippet_id(output.call_id, index)}>\n"
+                        f"{doc.stringify()}\n</snippet>"
                     )
                 return "\n".join(combined_snippet_text)
 
@@ -1292,7 +1299,8 @@ class MCPBrowseTool(MCPMixin, BaseTool, ABC):
             combined_webpage_text = []
             for index, doc in enumerate(output.documents):
                 combined_webpage_text.append(
-                    f"<webpage id={output.call_id}-{index}>\n{doc.stringify()}\n</webpage>"
+                    f"<webpage id={make_snippet_id(output.call_id, index)}>\n"
+                    f"{doc.stringify()}\n</webpage>"
                 )
             return "\n".join(combined_webpage_text)
 
