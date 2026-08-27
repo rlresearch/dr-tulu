@@ -58,7 +58,7 @@ except ImportError:
 # Import the workflow
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from workflows.auto_search_sft import AutoReasonSearchWorkflow
-from dr_agent.tool_interface.data_types import DocumentToolOutput
+from dr_agent.tool_interface.data_types import DocumentToolOutput, make_snippet_id
 
 if HAS_RICH:
     app = typer.Typer(help="Interactive chat using auto_search workflow")
@@ -308,7 +308,7 @@ async def chat_loop(
                     snippet_blocks = []
                     for idx, doc in enumerate(tool_call.documents):
                         snippet_id = (
-                            f"{tool_call.call_id}-{idx}"
+                            make_snippet_id(tool_call.call_id, idx)
                             if getattr(tool_call, "call_id", None)
                             else doc.id
                         )

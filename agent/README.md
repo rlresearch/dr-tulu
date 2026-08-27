@@ -64,6 +64,46 @@ Below we assume you are already in the `agent` directory.
 > If you run crawl4ai locally, you will need to install playwright and its dependencies.
 
 
+## Resolving citations to source URLs
+
+Search and browse tools label every document they return with an id (`{call_id}-{index}`),
+and the agent grounds its claims with `<cite id="...">...</cite>` tags. `dr_agent.citations`
+maps those ids back to the titles and URLs they came from:
+
+```python
+from dr_agent.citations import build_snippet_index, resolve_citations
+
+result = await workflow(problem="How fast did solar capacity grow in 2024?")
+
+index = build_snippet_index(result)  # snippet id -> Document, sub-agents included
+for citation in resolve_citations(result.generated_text, index):
+    print(citation.text, citation.urls)
+    if not citation.is_resolved:
+        # ids the model cited but never saw - off-the-shelf models invent these
+        print("unsupported ids:", citation.unresolved_ids)
+```
+
+To render an answer with numbered references instead:
+
+```python
+from dr_agent.citations import format_answer_with_references
+
+print(format_answer_with_references(result.generated_text, index))
+# Capacity doubled.[1]
+#
+# References
+# [1] Renewables 2024. https://www.iea.org/reports/renewables-2024
+```
+
+If you only kept the serialized trace (for example the `generated_text` field of an
+evaluation `.jsonl`), build the index from the text instead of from the tool outputs:
+
+```python
+from dr_agent.citations import parse_snippets_from_trace
+
+index = parse_snippets_from_trace(record["full_traces"]["generated_text"])
+```
+
 ## Deep Dive into the `serve` command: 
 
 The `serve` command can turn any workflow into a fastapi service with the following endpoints 

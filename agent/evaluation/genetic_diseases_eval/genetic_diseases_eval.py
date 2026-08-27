@@ -10,6 +10,7 @@ from collections import defaultdict
 from typing import Optional, TypedDict
 from samplers import common
 from samplers._types import Eval, EvalResult, MessageList, SamplerBase, SingleEvalResult
+from dr_agent.citations import parse_citations
 from dr_agent.dataset_utils.load_dataset import load_dataset
 from dotenv import load_dotenv
 
@@ -133,14 +134,13 @@ def get_citation_map(gen_data: dict, run_mode: str) -> dict[str, str]:
 
         response_text = gen_data["response_text"]
         citation_map = {}
-        pattern = r'<cite\s+id="([^"]+)">(.*?)</cite>'
-        for match in re.finditer(pattern, response_text):
-            cite_id_str = match.group(1)
-            span = match.group(2)
-            ids = [cid.strip() for cid in cite_id_str.split(",")]
+        # The prompts ask for <cite id="..."> but also show <cite ids="...">, and
+        # models emit both (sometimes unquoted), so parse all of those spellings.
+        for citation in parse_citations(response_text, include_unclosed=False):
+            span = citation.text
 
             # assign the span to each individual id
-            for cite_id in ids:
+            for cite_id in citation.ids:
                 if not cite_id in citation_map:
                     citation_map[cite_id] = {
                         "original_source": snippet_map.get(cite_id, "This citation id was hallucinated. All claims that cite it are unsupported."),
