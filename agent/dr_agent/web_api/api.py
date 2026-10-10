@@ -19,7 +19,7 @@ from fastapi.responses import (
     Response,
     StreamingResponse,
 )
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from ..tool_interface.data_types import DocumentToolOutput, ToolOutput
 from ..workflow import BaseWorkflow
@@ -34,6 +34,7 @@ class ChatRequest(BaseModel):
     content: Optional[str] = None
     messages: Optional[List[Message]] = None
     dataset_name: str = "long_form"
+    session_id: Optional[str] = Field(default=None, min_length=1, max_length=100)
 
 
 class SSECallback:
@@ -456,6 +457,7 @@ def create_app(
         dataset_name: str,
         event_queue: asyncio.Queue,
         messages: Optional[List[Dict[str, str]]] = None,
+        session_id: Optional[str] = None,
     ):
         """Run the workflow and stream events via the queue."""
         callback = SSECallback(event_queue)
@@ -469,6 +471,7 @@ def create_app(
             messages=messages,
             verbose=False,
             step_callback=callback,
+            **({"session_id": session_id} if session_id is not None else {}),
         )
 
         # Send final answer if available
@@ -527,6 +530,7 @@ def create_app(
             dataset_name=request.dataset_name,
             messages=messages_dicts,
             verbose=False,
+            **({"session_id": request.session_id} if request.session_id is not None else {}),
         )
 
         return {
@@ -582,7 +586,8 @@ def create_app(
             # Start the workflow in a background task
             task = asyncio.create_task(
                 run_workflow_with_streaming(
-                    content, request.dataset_name, event_queue, messages=messages_dicts
+                    content, request.dataset_name, event_queue,
+                    messages=messages_dicts, session_id=request.session_id,
                 )
             )
 

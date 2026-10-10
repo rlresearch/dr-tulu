@@ -63,6 +63,50 @@ Below we assume you are already in the `agent` directory.
 > [!NOTE]
 > If you run crawl4ai locally, you will need to install playwright and its dependencies.
 
+### Optional: keyless web search and browsing
+
+Select [Parallel Search MCP](https://docs.parallel.ai/integrations/mcp/search-mcp)
+for free web search and page excerpts without a search API key or account:
+
+```bash
+# After installing from agent/ as above, keep your model service running.
+python workflows/auto_search_sft.py serve --port 8080 \
+    --config workflows/auto_search_sft.yaml \
+    --config-overrides "search_tool_name=parallel,browse_tool_name=parallel"
+```
+
+Both `google_search` and `snippet_search` use general web search in this mode;
+Semantic Scholar's academic filters do not apply. Browsing returns relevant page
+excerpts, rather than complete page text. Search uses Fast mode on the anonymous
+`https://search.parallel.ai/mcp` endpoint, which has lower rate limits intended
+for exploration and light use. The existing provider defaults stay unchanged.
+No local MCP server, `SERPER_API_KEY`, `S2_API_KEY`, or `JINA_API_KEY` is needed
+when both tools use Parallel. Your model service or model API credentials are
+still required; you can also use the OpenAI config above with the same overrides.
+Chat API clients can pass an optional `session_id` (1–100 characters) and reuse
+it across turns of one conversation. Clients without a conversation ID can leave
+it unset; no per-turn session ID is sent for chat history in that case.
+
+For tool-only usage without a model service:
+
+```python
+import asyncio
+from dr_agent.tool_interface import ParallelSearchTool, ParallelBrowseTool
+
+async def main():
+    search = ParallelSearchTool(number_documents_to_search=3)
+    browse = ParallelBrowseTool(
+        max_pages_to_fetch=1, session_id=search.parallel_session_id
+    )
+    results = await search({"query": "DR Tulu deep research model"})
+    print(results.output)
+    if results.documents:
+        page = await browse(results)
+        print(page.output)
+
+asyncio.run(main())
+```
+
 
 ## Deep Dive into the `serve` command: 
 

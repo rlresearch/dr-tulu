@@ -19,6 +19,11 @@ from dr_agent.tool_interface.mcp_tools import (
     SerperBrowseTool,
     SerperSearchTool,
 )
+from dr_agent.tool_interface.parallel_tools import (
+    ParallelBrowseTool,
+    ParallelSearchTool,
+    with_parallel_session,
+)
 from dr_agent.utils import (
     check_port,
     extract_port_from_url,
@@ -321,7 +326,13 @@ class AutoReasonSearchWorkflow(BaseWorkflow):
 
         # Check MCP server
         mcp_port = getattr(cfg, "mcp_port", 8000)
-        if not check_port(mcp_port):
+        mcp_required = (
+            cfg.search_tool_name != "parallel"
+            or cfg.browse_tool_name not in ("parallel", None)
+        )
+        if not mcp_required:
+            console.print("[green]✓[/green] Using remote Parallel MCP tools")
+        elif not check_port(mcp_port):
             console.print(
                 f"[yellow]⚠[/yellow]  MCP server is not running on port [bold]{mcp_port}[/bold]"
             )
@@ -450,7 +461,22 @@ class AutoReasonSearchWorkflow(BaseWorkflow):
             mcp_port = cfg.mcp_port
 
         # Search and browse tools (MCP-backed) with unified tool parser
-        if cfg.search_tool_name == "serper":
+        if cfg.search_tool_name == "parallel":
+            self.search_tool = ParallelSearchTool(
+                tool_parser=cfg.tool_parser,
+                number_documents_to_search=cfg.number_documents_to_search,
+                timeout=cfg.search_timeout,
+                name="snippet_search",
+                model_name=cfg.search_agent_model_name,
+            )
+            self.search_tool2 = ParallelSearchTool(
+                tool_parser=cfg.tool_parser,
+                number_documents_to_search=cfg.number_documents_to_search,
+                timeout=cfg.search_timeout,
+                name="google_search",
+                model_name=cfg.search_agent_model_name,
+            )
+        elif cfg.search_tool_name == "serper":
             self.search_tool = SerperSearchTool(
                 tool_parser=cfg.tool_parser,
                 number_documents_to_search=cfg.number_documents_to_search,
@@ -513,7 +539,16 @@ class AutoReasonSearchWorkflow(BaseWorkflow):
         else:
             raise ValueError(f"Invalid search tool name: {cfg.search_tool_name}")
 
-        if cfg.browse_tool_name == "serper":
+        if cfg.browse_tool_name == "parallel":
+            self.browse_tool = ParallelBrowseTool(
+                tool_parser=cfg.tool_parser,
+                max_pages_to_fetch=cfg.browse_max_pages_to_fetch,
+                timeout=cfg.browse_timeout,
+                context_chars=cfg.browse_context_char_length,
+                name="browse_webpage",
+                model_name=cfg.search_agent_model_name,
+            )
+        elif cfg.browse_tool_name == "serper":
             self.browse_tool = SerperBrowseTool(
                 tool_parser=cfg.tool_parser,
                 max_pages_to_fetch=cfg.browse_max_pages_to_fetch,
@@ -590,6 +625,7 @@ class AutoReasonSearchWorkflow(BaseWorkflow):
                 prompt_version=cfg.prompt_version,
             )
 
+    @with_parallel_session
     async def __call__(
         self,
         problem: str,
@@ -598,6 +634,7 @@ class AutoReasonSearchWorkflow(BaseWorkflow):
         verbose: bool = True,
         search_callback: Optional[Any] = None,
         step_callback: Optional[Any] = None,
+        session_id: Optional[str] = None,
     ) -> Dict[str, Any]:
         cfg = self.configuration
         assert cfg is not None

@@ -13,6 +13,7 @@ from .mcp_tools import (
     WebThinkerBrowseTool,
 )
 from .tool_parsers import ToolCallInfo, ToolCallParser
+from .parallel_tools import ParallelBrowseTool, ParallelSearchTool
 
 __all__ = [
     # Core base classes
@@ -29,6 +30,8 @@ __all__ = [
     "MCPMixin",
     "SemanticScholarSnippetSearchTool",
     "SerperSearchTool",
+    "ParallelSearchTool",
+    "ParallelBrowseTool",
     "MassiveServeSearchTool",
     "SerperBrowseTool",
     "WebThinkerBrowseTool",
